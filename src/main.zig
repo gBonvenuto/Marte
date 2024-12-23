@@ -22,16 +22,21 @@ pub fn main() !void {
         else => return err,
     };
 
-    try parser(file_name);
+    tokenizer(file_name) catch |err| switch (err) {
+        error.UnknownToken => return,
+        else => return err,
+    };
 }
 
-const tokens = enum {
+// Tokens reconhecidos
+const Tokens = enum {
     @"if",
     then,
     @"else",
 };
 
-pub fn parser(file_name: []const u8) !void {
+pub fn tokenizer(file_name: []const u8) !void {
+    // Abrindo o arquivo
     var file = std.fs.cwd().openFile(file_name, .{ .mode = .read_only }) catch |err| switch (err) {
         error.FileNotFound => {
             std.debug.print("File Not found!", .{});
@@ -50,7 +55,15 @@ pub fn parser(file_name: []const u8) !void {
 
     // Iterando pelas palavras
     var iter = std.mem.tokenize(u8, file_content, " \n\t");
-    while (iter.next()) |word| {
-        std.debug.print("Word: {s}\n", .{word});
+    outer: while (iter.next()) |word| {
+        // Iterando pelo Enum de tokens
+        inline for (@typeInfo(Tokens).Enum.fields) |token| {
+            if (std.mem.eql(u8, token.name, word)) {
+                std.debug.print("{s} == {s}\n", .{ word, token.name });
+                continue :outer;
+            }
+        }
+        std.debug.print("Unknown Token: {s}\n", .{word});
+        return error.UnknownToken;
     }
 }
