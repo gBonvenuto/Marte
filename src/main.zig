@@ -1,24 +1,56 @@
 const std = @import("std");
 
-pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+const stdin = std.io.getStdIn().reader();
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+fn get_filename(args: [][]u8) ![]const u8 {
+    if (args.len < 2) {
+        return error.FileFieldEmpty;
+    }
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // don't forget to flush!
+    const file_name: []const u8 = args[1];
+    return file_name;
 }
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+pub fn main() !void {
+    const args = try std.process.argsAlloc(std.heap.page_allocator);
+    defer std.process.argsFree(std.heap.page_allocator, args);
+    const file_name: []const u8 = get_filename(args) catch |err| switch (err) {
+        error.FileFieldEmpty => {
+            std.debug.print("No file provided. Use {s} <File_Name>\n", .{args[0]});
+            return;
+        },
+        else => return err,
+    };
+
+    try parser(file_name);
+}
+
+const tokens = enum {
+    @"if",
+    then,
+    @"else",
+};
+
+pub fn parser(file_name: []const u8) !void {
+    var file = std.fs.cwd().openFile(file_name, .{ .mode = .read_only }) catch |err| switch (err) {
+        error.FileNotFound => {
+            std.debug.print("File Not found!", .{});
+            return;
+        },
+        else => return err,
+    };
+    defer file.close();
+
+    const allocator = std.heap.page_allocator;
+    const content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(content);
+
+    // Deixando o conteúdo imutável (boas práticas)
+    const file_content: []const u8 = content;
+
+    // Iterando pelas palavras
+    var iter = std.mem.tokenize(u8, file_content, " \n\t");
+    while (iter.next()) |word| {
+        std.debug.print("Word: {s}\n", .{word});
+    }
 }

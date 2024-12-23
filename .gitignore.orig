@@ -1,0 +1,7 @@
+<<<<<<< HEAD
+.zig-cache/
+zig-out/
+=======
+zig-out/
+.zig-cache/
+>>>>>>> 8dd7faf (Inicial commit)
