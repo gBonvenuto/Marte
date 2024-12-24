@@ -59,9 +59,9 @@ fn interactive(allocator: std.mem.Allocator) !void {
 
     while (true) {
         try stdout.print("> ", .{});
-        var line: [1000]u8 = undefined;
-        _ = try stdin.readUntilDelimiter(&line, '\n');
-        try tokenizer(&line, allocator);
+        var buf: [1000]u8 = undefined;
+        const line = try stdin.readUntilDelimiter(&buf, '\n');
+        try tokenizer(line, allocator);
     }
 }
 
@@ -75,18 +75,34 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
     // var evVar: bool = false;
 
     var i: usize = 0;
+    var token: Lex.Token = undefined;
     while (i < content.len) : (i += 1) {
+        defer {
+            token.print() catch {};
+        }
         const char = content[i];
-        if (char >= '0' and char <= '9') {
-            const ret = try Lex.numbers(content, i, allocator);
-            const token = ret.token;
-            i = ret.index;
-            const value: *f32 = @alignCast(@ptrCast(token.value));
-            std.debug.print("token: {any}, value: {any}\n", .{ token, value.* });
+
+        if (char == 0) {
+            break;
         }
 
-        // switch (char) {
-        // }
+        if (std.ascii.isWhitespace(char)) {
+            continue;
+        }
+
+        if (char >= '0' and char <= '9') {
+            const ret = try Lex.numbers(content, i, allocator);
+            i = ret.index;
+            token = ret.token;
+            continue;
+        }
+
+        switch (char) {
+            '+', '-', '*', '/' => {
+                token = try Lex.operators(content, i, allocator);
+        },
+            else => std.debug.print("char: {d}", .{char}),
+        }
 
         // // Iterando pelo Enum de tokens
         // var word: []u8 = @constCast(&[_]u8{0} ** 100);
