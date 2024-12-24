@@ -1,6 +1,8 @@
 const std = @import("std");
+const hashmap = @import("./hashmap.zig");
 
 const stdin = std.io.getStdIn().reader();
+var variablesHashMap: ?hashmap.VariablesHashMap = null;
 
 fn get_filename(args: [][]u8) ![]const u8 {
     if (args.len < 2) {
@@ -12,6 +14,14 @@ fn get_filename(args: [][]u8) ![]const u8 {
 }
 
 pub fn main() !void {
+
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = arena.allocator();
+
+    variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
+
+
     const args = try std.process.argsAlloc(std.heap.page_allocator);
     defer std.process.argsFree(std.heap.page_allocator, args);
     const file_name: []const u8 = get_filename(args) catch |err| switch (err) {
@@ -23,7 +33,7 @@ pub fn main() !void {
     };
 
     tokenizer(file_name) catch |err| switch (err) {
-        error.UnknownToken => return,
+        //error.UnknownToken => return,
         else => return err,
     };
 }
@@ -54,16 +64,29 @@ pub fn tokenizer(file_name: []const u8) !void {
     const file_content: []const u8 = content;
 
     // Iterando pelas palavras
+
+    var varName: []const u8 = undefined;
+    var evVar: bool = false;
+
     var iter = std.mem.tokenize(u8, file_content, " \n\t");
-    outer: while (iter.next()) |word| {
+
+    while (iter.next()) |word| {
         // Iterando pelo Enum de tokens
         inline for (@typeInfo(Tokens).Enum.fields) |token| {
             if (std.mem.eql(u8, token.name, word)) {
                 std.debug.print("{s} == {s}\n", .{ word, token.name });
-                continue :outer;
+                break;
             }
         }
-        std.debug.print("Unknown Token: {s}\n", .{word});
-        return error.UnknownToken;
+        // Se não é um token especial, então é uma variável
+        // Pegamos o nome dela
+        evVar = true;
+
+        try handleVars(word);
     }
+}
+
+fn handleVars(word: []const u8) !void {
+        const int: u8 = 8;
+        _ = try variablesHashMap.?.assignVar(word, @ptrCast(@constCast(&int)));
 }

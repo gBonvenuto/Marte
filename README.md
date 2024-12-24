@@ -6,6 +6,7 @@ The goal is to fix some of the issues I found while coding in Lua while giving i
 
 - [ ] `continue` keyword, so we can reduce the use of labels
 - [ ] The ability to execute shell programs 
+- [ ] Variables are always local unless declared as global
 
 I **do not** plan to change the starting index from 1 to 0. This is a core feature of Lua and encourages the programmer to use iterators instead of indexes.
 
