@@ -2,6 +2,7 @@ const std = @import("std");
 const hashmap = @import("./hashmap.zig");
 
 const stdin = std.io.getStdIn().reader();
+const stdout = std.io.getStdOut().writer();
 var variablesHashMap: ?hashmap.VariablesHashMap = null;
 
 fn get_filename(args: [][]u8) ![]const u8 {
@@ -14,28 +15,37 @@ fn get_filename(args: [][]u8) ![]const u8 {
 }
 
 pub fn main() !void {
-
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = arena.allocator();
 
-    variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
-
-
     const args = try std.process.argsAlloc(std.heap.page_allocator);
     defer std.process.argsFree(std.heap.page_allocator, args);
-    const file_name: []const u8 = get_filename(args) catch |err| switch (err) {
-        error.FileFieldEmpty => {
-            std.debug.print("No file provided. Use {s} <File_Name>\n", .{args[0]});
-            return;
-        },
+
+    const file_name: ?[]const u8 = get_filename(args) catch |err| switch (err) {
+        error.FileFieldEmpty => null,
         else => return err,
     };
 
-    tokenizer(file_name) catch |err| switch (err) {
-        //error.UnknownToken => return,
-        else => return err,
-    };
+    if (file_name) |f| {
+        variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
+        tokenizer(f) catch |err| switch (err) {
+            else => return err,
+        };
+    } else {
+        try interactive();
+    }
+}
+
+fn interactive() !void {
+    try stdout.print("Marte 0.0.1 Copyright (C) 2024 Giancarlo Bonvenuto\n", .{});
+
+    while (true) {
+        try stdout.print("> ", .{});
+        var line: [1000]u8 = undefined;
+        _ = try stdin.readUntilDelimiter(&line, '\n');
+        tokenizer(file_name: []const u8)
+    }
 }
 
 // Tokens reconhecidos
@@ -65,13 +75,22 @@ pub fn tokenizer(file_name: []const u8) !void {
 
     // Iterando pelas palavras
 
-    var varName: []const u8 = undefined;
+    // var varName: []const u8 = undefined;
     var evVar: bool = false;
 
-    var iter = std.mem.tokenize(u8, file_content, " \n\t");
+    for (file_content, 0..) |char, i| {
 
-    while (iter.next()) |word| {
         // Iterando pelo Enum de tokens
+        var word: []u8 = @constCast(&[_]u8{0} ** 100);
+        word[0] = char;
+        inline for (1..100) |j| {
+            if (std.ascii.isWhitespace(file_content[i + j])) {
+                word[j] = 0;
+                break;
+            }
+
+            word[j] = file_content[i + j];
+        }
         inline for (@typeInfo(Tokens).Enum.fields) |token| {
             if (std.mem.eql(u8, token.name, word)) {
                 std.debug.print("{s} == {s}\n", .{ word, token.name });
@@ -87,6 +106,6 @@ pub fn tokenizer(file_name: []const u8) !void {
 }
 
 fn handleVars(word: []const u8) !void {
-        const int: u8 = 8;
-        _ = try variablesHashMap.?.assignVar(word, @ptrCast(@constCast(&int)));
+    const int: u8 = 8;
+    _ = try variablesHashMap.?.assignVar(word, @ptrCast(@constCast(&int)));
 }
