@@ -18,6 +18,12 @@ pub const Lex = struct {
             keyword,
         };
     };
+
+    //TODO:
+    // pub fn print(token: Token) void {
+    //
+    // }
+    
     pub fn numbers(content: []const u8, initial_index: usize, allocator: std.mem.Allocator) !struct { token: Token, index: usize } {
         var index = initial_index;
         var tok_type = Token.Types.integer;
