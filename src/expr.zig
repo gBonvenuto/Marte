@@ -66,6 +66,7 @@ pub const ExprAnalyzer = struct {
         return switch (token.value.op) {
             .@"+", .@"-" => 1,
             .@"*", .@"/" => 2,
+            //TODO: parentesis
             else => error.UnkownOperator,
         };
     }

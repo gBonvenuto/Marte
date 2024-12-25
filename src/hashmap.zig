@@ -9,12 +9,9 @@ pub const VariablesHashMap = struct {
     pub fn init(allocator: std.mem.Allocator) !VariablesHashMap {
         const len = 7529;
         var map: []?*Node = try allocator.alloc(?*Node, len);
-        std.debug.print("até aqui tudo certo\n", .{});
         for (0..len) |i| {
-            std.debug.print("{d}, ", .{i});
             map[i] = null;
         }
-        std.debug.print("\n", .{});
         return VariablesHashMap{ .map = map, .len = len, .allocator = allocator };
     }
     //TODO:
