@@ -1,6 +1,7 @@
 const std = @import("std");
 const hashmap = @import("./hashmap.zig");
 const Lex = @import("./LexicalAnalyzer.zig").Lex;
+const Expr = @import("./Expr.zig");
 
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
@@ -65,10 +66,10 @@ fn interactive(allocator: std.mem.Allocator) !void {
     }
 }
 
-// Tokens reconhecidos
-
 pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
     var i: usize = 0;
+
+    var pendingExpr = false;
 
     while (i < content.len) : (i += 1) {
 
@@ -88,11 +89,17 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
 
         // Se for whitespace a gente ignora
         if (std.ascii.isWhitespace(char)) {
+
+            // Se o whitespace for um \n, então vemos se tem uma expressão pendente
+            if (char == '\n' and pendingExpr) {
+
+            }
             continue;
         }
 
         // Se for um número, aplicamos um parser próprio
         if (char >= '0' and char <= '9') {
+            pendingExpr = true;
             const ret = try Lex.numbers(content, i, allocator);
             i = ret.index;
             token = ret.token;
@@ -103,6 +110,7 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         switch (char) {
             '+', '-', '*', '/', '=' => {
                 token = try Lex.operators(content, i, allocator);
+                try Expr.ExprAnalyzer.analyse("2+3*4", allocator);
             },
             else => std.debug.print("char: {d}", .{char}),
         }
