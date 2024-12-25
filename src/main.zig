@@ -77,9 +77,9 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         var token: ?Lex.Token = null;
         defer {
             if (token) |t| {
-                t.print() catch {};
-                arrList.append(t) catch {
-                    std.debug.print("deu alguma bosta aqui", .{});
+                // t.print() catch {};
+                arrList.append(t) catch |err| {
+                    std.debug.print("deu alguma bosta aqui {}", .{err});
                 };
             }
         }

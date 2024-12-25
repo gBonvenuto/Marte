@@ -12,6 +12,17 @@ pub const Stack = struct {
         prev: ?*Node = null,
     };
 
+    /// Reverses the Stack (this function modifies the current Stack)
+    pub fn reverse(self: Stack) void {
+        const new = Stack{};
+        var node = self.pop();
+        while (node != null) {
+            new.push(node);
+            node = self.pop();
+        }
+        self = new;
+    }
+
     pub fn print(self: Stack) void {
         var node = self.last_node;
 
@@ -58,16 +69,85 @@ pub const ExprAnalyzer = struct {
             else => error.UnkownOperator,
         };
     }
+    pub fn evaluate(stack: *Stack) !Token {
+        std.debug.print("evaluating: ", .{});
+        stack.print();
+        const op = stack.pop().?.value;
+        const val2 = stack.pop().?.value;
+        const val1 = stack.pop().?.value;
+        if (op.type != .op) {
+            return error.opnotoperator;
+        }
+        if (val1.type != .integer and val1.type != .float) {
+            return error.val1NotNumber;
+        }
+        if (val2.type != .integer and val2.type != .float) {
+            return error.val2NotNumber;
+        }
+        switch (op.value.op) {
+            .@"+" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .integer, .value = .{ .integer = val1.value.integer + val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float + val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1_f + val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float + val2_f } };
+                } else unreachable;
+            },
+            .@"-" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .integer, .value = .{ .integer = val1.value.integer - val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float - val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1_f - val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float - val2_f } };
+                } else unreachable;
+            },
+            .@"*" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .integer, .value = .{ .integer = val1.value.integer * val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float * val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1_f * val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float * val2_f } };
+                } else unreachable;
+            },
+            .@"/" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .integer, .value = .{ .integer = try std.math.divTrunc(i32, val1.value.integer, val2.value.integer) } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float / val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1_f / val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .float, .value = .{ .float = val1.value.float / val2_f } };
+                } else unreachable;
+            },
+            else => {
+                return error.NotImplemented;
+            },
+        }
+    }
     pub fn analyse(tok_array: []const Token, allocator: std.mem.Allocator) !void {
         // Vamos ter dois stacks, um que contém a expressão e outro com os caracteres aguardando
         var main = Stack{ .allocator = allocator };
         var waiting = Stack{ .allocator = allocator };
 
         for (tok_array) |token| {
-            std.debug.print("current main stack:\n", .{});
-            main.print();
-            std.debug.print("current waiting stack:\n", .{});
-            waiting.print();
             switch (token.type) {
                 // Se for um número, ele vai diretamente para o main stack
                 .integer, .float => {
@@ -79,7 +159,7 @@ pub const ExprAnalyzer = struct {
                         if (waiting.peek()) |last_node| {
                             const token_prec = try getOpPrecedence(token);
                             const last_node_prec = try getOpPrecedence(last_node.value);
-                            
+
                             // Se a precedência atual é maior do que a do
                             // waiting stack, então colocamos o atual na
                             // waiting stack
@@ -94,6 +174,9 @@ pub const ExprAnalyzer = struct {
                                 _ = waiting.pop();
                                 try main.push(last_node.value);
                                 try waiting.push(token);
+
+                                try main.push(try evaluate(&main));
+
                                 break :outer;
                             }
                             // Se a precedência atual é menor, então fazemos
@@ -103,9 +186,12 @@ pub const ExprAnalyzer = struct {
                                 _ = waiting.pop();
                                 try main.push(last_node.value);
                                 try waiting.push(token);
+
+                                try main.push(try evaluate(&main));
+
                                 continue :outer;
                             }
-                        } 
+                        }
                         // Se não tiver ninguém no waiting, então colocamos este
                         // e terminamos o loop
                         else {
@@ -114,15 +200,14 @@ pub const ExprAnalyzer = struct {
                         }
                     }
                 },
-                else => return error.UnkownToken
+                else => return error.UnkownToken,
             }
         }
         // Agora que terminamos os tokens, vamos liberar o waiting stack
-        var node = waiting.peek();
-        while (node != null) {
+        while (waiting.peek() != null) {
             const popped = waiting.pop();
             try main.push(popped.?.value);
-            node = waiting.peek();
+            try main.push(try evaluate(&main));
         }
         main.print();
     }
