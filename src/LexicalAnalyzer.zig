@@ -27,7 +27,11 @@ pub const Lex = struct {
                     const value: *f32 = @alignCast(@ptrCast(self.value));
                     std.debug.print("token: {any}, value: {e}\n", .{ self, value.* });
                 },
-                else => return error.UnknownType
+                .op => {
+                    const value: *u8 = @alignCast(@ptrCast(self.value));
+                    std.debug.print("token: {any}, value: {c}\n", .{ self, value.* });
+                },
+                else => return error.UnknownType,
             }
         }
     };

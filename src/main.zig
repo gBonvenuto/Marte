@@ -68,28 +68,30 @@ fn interactive(allocator: std.mem.Allocator) !void {
 // Tokens reconhecidos
 
 pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
-
-    // Iterando pelas palavras
-
-    // var varName: []const u8 = undefined;
-    // var evVar: bool = false;
-
     var i: usize = 0;
-    var token: Lex.Token = undefined;
+
     while (i < content.len) : (i += 1) {
+
+        // Imprimir os tokens
+        var token: ?Lex.Token = null;
         defer {
-            token.print() catch {};
+            if (token) |t|
+                t.print() catch {};
         }
+
         const char = content[i];
 
+        // Se for o caracter nulo, terminar
         if (char == 0) {
             break;
         }
 
+        // Se for whitespace a gente ignora
         if (std.ascii.isWhitespace(char)) {
             continue;
         }
 
+        // Se for um número, aplicamos um parser próprio
         if (char >= '0' and char <= '9') {
             const ret = try Lex.numbers(content, i, allocator);
             i = ret.index;
@@ -97,30 +99,13 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
             continue;
         }
 
+        // Se for um caracter de operador, tratamos aqui
         switch (char) {
-            '+', '-', '*', '/' => {
+            '+', '-', '*', '/', '=' => {
                 token = try Lex.operators(content, i, allocator);
-        },
+            },
             else => std.debug.print("char: {d}", .{char}),
         }
-
-        // // Iterando pelo Enum de tokens
-        // var word: []u8 = @constCast(&[_]u8{0} ** 100);
-        // word[0] = char;
-        // inline for (1..100) |j| {
-        //     if (std.ascii.isWhitespace(content[i + j])) {
-        //         word[j] = 0;
-        //         break;
-        //     }
-        //
-        //     word[j] = content[i + j];
-        // }
-        // inline for (@typeInfo(Tokens).Enum.fields) |token| {
-        //     if (std.mem.eql(u8, token.name, word)) {
-        //         std.debug.print("{s} == {s}\n", .{ word, token.name });
-        //         break;
-        //     }
-        // }
     }
 }
 
