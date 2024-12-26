@@ -71,8 +71,6 @@ pub const ExprAnalyzer = struct {
         };
     }
     pub fn evaluate(stack: *Stack) !Token {
-        std.debug.print("evaluating: ", .{});
-        stack.print();
         const op = stack.pop().?.value;
         const val2 = stack.pop().?.value;
         const val1 = stack.pop().?.value;
@@ -143,7 +141,7 @@ pub const ExprAnalyzer = struct {
             },
         }
     }
-    pub fn analyse(tok_array: []const Token, allocator: std.mem.Allocator) !void {
+    pub fn analyse(tok_array: []const Token, allocator: std.mem.Allocator) !Token {
         // Vamos ter dois stacks, um que contém a expressão e outro com os caracteres aguardando
         var main = Stack{ .allocator = allocator };
         var waiting = Stack{ .allocator = allocator };
@@ -210,6 +208,6 @@ pub const ExprAnalyzer = struct {
             try main.push(popped.?.value);
             try main.push(try evaluate(&main));
         }
-        main.print();
+        return main.pop().?.value;
     }
 };

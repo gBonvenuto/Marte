@@ -53,6 +53,7 @@ pub fn main() !void {
             else => return err,
         };
     } else {
+        variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
         try interactive(allocator);
     }
 }
@@ -71,8 +72,6 @@ fn interactive(allocator: std.mem.Allocator) !void {
 pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
     var i: usize = 0;
     var arrList = std.ArrayList(Lex.Token).init(allocator);
-    var pendingExpr = false;
-    var pendingAssignment = false;
     var token: ?Lex.Token = null;
 
     while (i < content.len) : (i += 1) {
@@ -84,6 +83,7 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
                 arrList.append(t) catch |err| {
                     std.debug.print("deu alguma bosta aqui {}", .{err});
                 };
+                token = null;
             }
         }
 
@@ -99,14 +99,13 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
 
             // Se o whitespace for um \n, então vemos se tem uma expressão pendente
             if (char == '\n' or char == 0) {
-                try processLine(arrList);
+                try processLine(arrList, allocator);
             }
             continue;
         }
 
         // Se for um número, aplicamos um parser próprio
         if (char >= '0' and char <= '9') {
-            pendingExpr = true;
             const ret = try Lex.numbers(content, i);
             i = ret.index;
             token = ret.token;
@@ -120,24 +119,37 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         };
         // Se já tivermos encontrado o token continuamos o loop
         if (token != null) {
-            if (token.?.value.op == .@"=") {
-                pendingAssignment = true;
-            }
             continue;
         }
 
         // Se for algo que não conhecemos, então é uma variável
         i, token = Lex.variables(content, i);
-        pendingExpr = true;
     }
-    try processLine(arrList);
+    try processLine(arrList, allocator);
 }
 
-fn processLine(arrList: std.ArrayList(Token)) !void {
+fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !void {
     const arr = arrList.items;
-    std.debug.print("Processing line {any}", .{arr});
     for (arr, 0..) |token, i| {
         switch (token.type) {
+            .variable => {
+                // Se for apenas uma única variável, então significa que devemos
+                // imprimi-la
+                if (arr.len == 1) {
+                    var buf: [50]u8 = undefined;
+                    const value = try variablesHashMap.?.getVar(token);
+                    if (value) |val| {
+                        const val_str: []const u8 = switch (val.type) {
+                            .integer => try std.fmt.bufPrintZ(&buf, "{d} (integer)", .{val.value.integer}),
+                            .float => try std.fmt.bufPrintZ(&buf, "{e} (float)", .{val.value.float}),
+                            .boolean => try std.fmt.bufPrintZ(&buf, "{} (boolean)", .{val.value.boolean}),
+                            .char => try std.fmt.bufPrintZ(&buf, "{c} (char)", .{val.value.char}),
+                            else => return error.UnknownValueType,
+                        };
+                        try stdout.print("{s} = {s}\n", .{ token.value.variable, val_str });
+                    }
+                }
+            },
             .op => {
                 switch (token.value.op) {
                     // Um igual significa que é um assignment
@@ -146,11 +158,23 @@ fn processLine(arrList: std.ArrayList(Token)) !void {
                         if (i <= 0) {
                             panic("(=) at beginning of line");
                         }
+
+                        if (arr[i - 1].type != Token.Types.variable) {
+                            panic("Trying to assign value to not a variable");
+                        }
+
+                        if (i >= arr.len) {
+                            panic("Trying to assign nothing to variable");
+                        }
+
+                        const ret = try Expr.ExprAnalyzer.analyse(arr[i + 1 ..], allocator);
+
+                        try variablesHashMap.?.assignVar(arr[i - 1], ret);
                     },
-                    else => unreachable,
+                    else => {},
                 }
             },
-            else => unreachable,
+            else => {},
         }
     }
 }

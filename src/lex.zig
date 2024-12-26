@@ -102,7 +102,7 @@ pub const Lex = struct {
         inline for (@typeInfo(Operators).Enum.fields, 0..) |field, i| {
             for (field.name, 0..) |f_char, j| {
                 // Se tiver um caracter diferente, então não é este operador
-                if (j >= content.len or content[initial_index + j] != f_char) {
+                if (j+initial_index >= content.len or content[initial_index + j] != f_char) {
                     break;
                 }
                 jndex = j;
@@ -119,7 +119,7 @@ pub const Lex = struct {
 
     pub fn variables(content: []const u8, initial_index: usize) struct { usize, Token } {
         var index: usize = initial_index;
-        while (index < content.len and !(std.ascii.isWhitespace(content[index]))) {
+        while (index < content.len and std.ascii.isAlphabetic(content[index])) {
             index += 1;
         }
 

@@ -33,11 +33,9 @@ pub const VariablesHashMap = struct {
         var node_curr: ?*Node = self.map[hash];
         var node_prev: ?*Node = null;
         const varName = node.name.value.variable;
-        std.debug.print("self.map[hash] = {any}\nnode_prev = {any}\n", .{ node_curr, node_prev });
 
         while (node_curr != null) {
-            std.debug.print("entramos no loop\n", .{});
-            if (std.mem.eql(u8, varName, node.?.name)) {
+            if (std.mem.eql(u8, varName, node_curr.?.name.value.variable)) {
                 // Se chegou aqui é porque a variável já existe, então mudamos o seu valor
                 node_curr.?.*.value = node.value;
                 return;
@@ -52,12 +50,10 @@ pub const VariablesHashMap = struct {
 
         // Se o previous é null então nunca tivemos nenhum node aqui
         if (node_prev == null) {
-            std.debug.print("New node: {any}, Node: {any}\n", .{ new_node, node });
             self.map[hash] = new_node;
         }
         // se o previous não é null, então adicionamos este como o próximo do preivous
         else {
-            std.debug.print("New node: {any}, Prev node: {any}\n", .{ new_node, node_prev });
             node_prev.?.next = new_node;
         }
     }
@@ -74,14 +70,14 @@ pub const VariablesHashMap = struct {
             return error.ValIsNotValueToken;
         }
 
-        hashInsert(self, Node{
+        try hashInsert(self, Node{
             .name = variable,
             .value = value,
         });
     }
 
-    /// Returns the pointer to the value
-    pub fn getVar(self: VariablesHashMap, variable: Token) !?u32 {
+    /// Returns the token of the value
+    pub fn getVar(self: VariablesHashMap, variable: Token) !?Token {
         if (variable.type != .variable) {
             return error.VarIsNotVariableToken;
         }
@@ -96,8 +92,8 @@ pub const VariablesHashMap = struct {
 
         var node: ?*Node = self.map[hash];
         while (node != null) {
-            if (std.mem.eql(u8, varName, node.?.name)) {
-                return node.?.*.ptrToVal;
+            if (std.mem.eql(u8, varName, node.?.name.value.variable)) {
+                return node.?.value;
             } else {
                 node = node.?.next;
             }
