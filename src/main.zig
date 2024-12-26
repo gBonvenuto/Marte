@@ -1,6 +1,7 @@
 const std = @import("std");
-const hashmap = @import("./hashmap.zig");
+const hashmap = @import("./varhashmap.zig");
 const Lex = @import("./lex.zig").Lex;
+const Token = @import("./lex.zig").Lex.Token;
 const Expr = @import("./expr.zig");
 
 const stdin = std.io.getStdIn().reader();
@@ -70,14 +71,15 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
     var i: usize = 0;
     var arrList = std.ArrayList(Lex.Token).init(allocator);
     var pendingExpr = false;
+    var pendingAssignment = false;
+    var token: ?Lex.Token = null;
 
     while (i < content.len) : (i += 1) {
 
         // Imprimir os tokens
-        var token: ?Lex.Token = null;
         defer {
             if (token) |t| {
-                // t.print() catch {};
+                t.print() catch {};
                 arrList.append(t) catch |err| {
                     std.debug.print("deu alguma bosta aqui {}", .{err});
                 };
@@ -95,7 +97,9 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         if (std.ascii.isWhitespace(char)) {
 
             // Se o whitespace for um \n, então vemos se tem uma expressão pendente
-            if (char == '\n' and pendingExpr) {}
+            if (char == '\n' or char == 0) {
+                try processLine(arrList);
+            }
             continue;
         }
 
@@ -109,18 +113,49 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         }
 
         // Se for um caracter de operador, tratamos aqui
-        switch (char) {
-            '+', '-', '*', '/', '=' => {
-                token = try Lex.operators(content, i);
-            },
-            else => std.debug.print("char: {d}", .{char}),
+        i, token = Lex.operators(content, i) catch |err| switch (err) {
+            error.UnknownOperator => .{ i, null }, //Ignorar o erro
+            else => return err,
+        };
+        // Se já tivermos encontrado o token continuamos o loop
+        if (token != null) {
+            if (token.?.value.op == .@"=") {
+                pendingAssignment = true;
+            }
+            continue;
         }
+
+        // Se for algo que não conhecemos, então é uma variável
+        i, token = Lex.variables(content, i);
+        pendingExpr = true;
     }
-    // Agora que terminamos vamos avaliar a expressão
-    try Expr.ExprAnalyzer.analyse(arrList.items, allocator);
+    try processLine(arrList);
 }
 
-fn handleVars(word: []const u8) !void {
-    const int: u8 = 8;
-    _ = try variablesHashMap.?.assignVar(word, @ptrCast(@constCast(&int)));
+fn processLine(arrList: std.ArrayList(Token)) !void {
+    const arr = arrList.items;
+    std.debug.print("Processing line {any}", .{arr});
+    for (arr, 0..) |token, i| {
+        switch (token.type) {
+            .op => {
+                switch (token.value.op) {
+                    // Um igual significa que é um assignment
+                    .@"=" => {
+                        // Verificando se o igual não está no começo da linha
+                        if (i <= 0) {
+                            panic("(=) at beginning of line");
+                        }
+                    },
+                    else => unreachable,
+                }
+            },
+            else => unreachable,
+        }
+    }
+}
+
+fn panic(message: []const u8) noreturn {
+    std.debug.print("\n{}ALERTA ALERTA ALERTA {s}", .{std.io.tty.Color.red, message});
+    std.posix.exit(1);
+    unreachable;
 }

@@ -21,8 +21,8 @@ pub const Lex = struct {
         @"-",
         @"*",
         @"/",
-        @"=",
         @"==",
+        @"=",
         @"(",
         @")",
     };
@@ -33,33 +33,22 @@ pub const Lex = struct {
             integer: i32,
             float: f32,
             char: u8,
+            boolean: bool,
             op: Operators,
             keyword: Keywords,
+            variable: []const u8, //name
         };
         pub const Types = enum {
             integer,
             float,
             char,
+            boolean,
             op,
             keyword,
+            variable,
         };
         pub fn print(self: Token) !void {
-            std.debug.print("token: {any}\n", .{self});
-            // switch (self.type) {
-            //     .integer => {
-            //         const value: *usize = @alignCast(@ptrCast(self.value));
-            //         std.debug.print("token: {any}, value: {d}\n", .{ self, value.* });
-            //     },
-            //     .float => {
-            //         const value: *f32 = @alignCast(@ptrCast(self.value));
-            //         std.debug.print("token: {any}, value: {e}\n", .{ self, value.* });
-            //     },
-            //     .op => {
-            //         const value: *u8 = @alignCast(@ptrCast(self.value));
-            //         std.debug.print("token: {any}, value: {c}\n", .{ self, value.* });
-            //     },
-            //     else => return error.UnknownType,
-            // }
+            std.debug.print("token: {}\n", .{self});
         }
     };
 
@@ -108,21 +97,37 @@ pub const Lex = struct {
         }
     }
 
-    pub fn operators(content: []const u8, initial_index: usize) !Token {
+    pub fn operators(content: []const u8, initial_index: usize) error{UnknownOperator}!struct { usize, Token } {
+        var jndex: usize = 0;
         inline for (@typeInfo(Operators).Enum.fields, 0..) |field, i| {
             for (field.name, 0..) |f_char, j| {
                 // Se tiver um caracter diferente, então não é este operador
                 if (j >= content.len or content[initial_index + j] != f_char) {
                     break;
                 }
+                jndex = j;
             }
-            // Se terminamos o loop sem então encontramos o nosso operador
+            // Se terminamos o loop sem break então encontramos o nosso operador
             else {
                 const op: Operators = @enumFromInt(i);
-                return Token{ .value = .{ .op = op }, .type = .op };
+                return .{ initial_index + jndex, Token{ .value = .{ .op = op }, .type = .op } };
             }
         }
         // Se chegarmos aqui é porque não encontramos nosso operador
         return error.UnknownOperator;
+    }
+
+    pub fn variables(content: []const u8, initial_index: usize) struct { usize, Token } {
+        var index: usize = initial_index;
+        while (index < content.len and !(std.ascii.isWhitespace(content[index]))) {
+            index += 1;
+        }
+
+        const name: []const u8 = content[initial_index..index];
+
+        return .{ index, Token{
+            .value = Token.Value{ .variable = name },
+            .type = .variable,
+        } };
     }
 };
