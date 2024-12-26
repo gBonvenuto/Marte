@@ -3,6 +3,7 @@ const hashmap = @import("./varhashmap.zig");
 const Lex = @import("./lex.zig").Lex;
 const Token = @import("./lex.zig").Lex.Token;
 const Expr = @import("./expr.zig");
+const Chameleon = @import("chameleon");
 
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
@@ -35,7 +36,7 @@ pub fn main() !void {
         // Abrindo o arquivo
         var file = std.fs.cwd().openFile(f, .{ .mode = .read_only }) catch |err| switch (err) {
             error.FileNotFound => {
-                std.debug.print("File Not found!", .{});
+                panic("File Not Found!");
                 return;
             },
             else => return err,
@@ -79,7 +80,7 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         // Imprimir os tokens
         defer {
             if (token) |t| {
-                t.print() catch {};
+                // t.print() catch {};
                 arrList.append(t) catch |err| {
                     std.debug.print("deu alguma bosta aqui {}", .{err});
                 };
@@ -155,7 +156,13 @@ fn processLine(arrList: std.ArrayList(Token)) !void {
 }
 
 fn panic(message: []const u8) noreturn {
-    std.debug.print("\n{}ALERTA ALERTA ALERTA {s}", .{std.io.tty.Color.red, message});
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    var cham = Chameleon.initRuntime(.{ .allocator = allocator });
+    defer cham.deinit();
+
+    cham.red().bold().printOut("\n{s}\n", .{message}) catch {};
     std.posix.exit(1);
+
     unreachable;
 }
