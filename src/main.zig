@@ -142,7 +142,7 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                     const val = try variablesHashMap.?.getVar(token);
                     const val_str: []const u8 = switch (val.type) {
                         .number => blk: {
-                            if (@mod(token.value.number, 1) == 0 ) {
+                            if (@mod(val.value.number, 1) == 0 ) {
                                 // Inteiro
                                 break :blk try std.fmt.bufPrintZ(&buf, "{d}", .{val.value.number});
                             } else {
