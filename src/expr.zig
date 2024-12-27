@@ -88,151 +88,58 @@ pub const ExprAnalyzer = struct {
         if (op.type != .op) {
             return error.opnotoperator;
         }
-        if (val2.type != .integer and val2.type != .float) {
+        if (val2.type != .number) {
             return error.val2NotNumber;
         }
-        if (!onlyOneValue and val1.type != .integer and val1.type != .float) {
+        if (!onlyOneValue and val1.type != .number) {
             return error.val1NotNumber;
         }
         switch (op.value.op) {
             .@"+" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .integer, .value = .{ .integer = val1.value.integer + val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float + val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1_f + val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float + val2_f } };
-                } else unreachable;
+                return Token{ .type = .number, .value = .{ .number = val1.value.number + val2.value.number } };
             },
             .@"-" => {
                 if (onlyOneValue) {
                     switch (val2.type) {
-                        .integer => return Token{ .type = .integer, .value = .{ .integer = -val2.value.integer } },
-                        .float => return Token{ .type = .float, .value = .{ .float = -val2.value.float } },
+                        .number => return Token{ .type = .number, .value = .{ .number  = -val2.value.number } },
                         else => unreachable,
                     }
                 }
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .integer, .value = .{ .integer = val1.value.integer - val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float - val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1_f - val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float - val2_f } };
-                } else unreachable;
+                return Token{ .type = .number, .value = .{ .number = val1.value.number - val2.value.number } };
             },
             .@"*" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .integer, .value = .{ .integer = val1.value.integer * val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float * val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1_f * val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float * val2_f } };
-                } else unreachable;
+                return Token{ .type = .number, .value = .{ .number = val1.value.number * val2.value.number } };
             },
             .@"/" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .integer, .value = .{ .integer = try std.math.divTrunc(i32, val1.value.integer, val2.value.integer) } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float / val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1_f / val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .float, .value = .{ .float = val1.value.float / val2_f } };
-                } else unreachable;
+                return Token{ .type = .number, .value = .{ .number = val1.value.number / val2.value.number } };
             },
             .@"=" => {
                 return error.AssignmentInsideExpression;
             },
             .@">" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer > val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float > val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f > val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float > val2_f } };
-                } else unreachable;
+                return Token{ .type = .boolean, .value = .{ .boolean = val1.value.number > val2.value.number } };
             },
             .@">=" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer >= val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float >= val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f >= val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float >= val2_f } };
-                } else unreachable;
+                return Token{ .type = .boolean, .value = .{ .boolean = val1.value.number >= val2.value.number } };
             },
             .@"<" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer < val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float < val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f < val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float < val2_f } };
-                } else unreachable;
+                return Token{ .type = .boolean, .value = .{ .boolean = val1.value.number < val2.value.number } };
             },
             .@"<=" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer <= val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float <= val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f <= val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float <= val2_f } };
-                } else unreachable;
+                return Token{ .type = .boolean, .value = .{ .boolean = val1.value.number <= val2.value.number } };
             },
             .@"==" => {
-                if (val1.type == .integer and val2.type == .integer) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer == val2.value.integer } };
-                } else if (val1.type == .float and val2.type == .float) {
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float == val2.value.float } };
-                } else if (val1.type == .integer and val2.type == .float) {
-                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f == val2.value.float } };
-                } else if (val1.type == .float and val2.type == .integer) {
-                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
-                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float == val2_f } };
-                } else unreachable;
+                return Token{ .type = .boolean, .value = .{ .boolean = val1.value.number == val2.value.number } };
             },
             .@"and" => {
                 if (val1.type == .boolean and val2.type == .boolean) {
-                    return Token{.type = .boolean, .value = .{ .boolean = val1.value.boolean and val2.value.boolean }};
-                }
-                else return error.LocalAndNonBoolean;
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.boolean and val2.value.boolean } };
+                } else return error.LocalAndNonBoolean;
             },
             .@"or" => {
                 if (val1.type == .boolean and val2.type == .boolean) {
-                    return Token{.type = .boolean, .value = .{ .boolean = val1.value.boolean or val2.value.boolean }};
-                }
-                else return error.LocalAndNonBoolean;
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.boolean or val2.value.boolean } };
+                } else return error.LocalAndNonBoolean;
             },
             else => {
                 return error.NotImplemented;
@@ -251,7 +158,7 @@ pub const ExprAnalyzer = struct {
                     try main.push(value);
                 },
                 // Se for um número, ele vai diretamente para o main stack
-                .integer, .float => {
+                .number => {
                     try main.push(token);
                 },
                 // Se for um operador

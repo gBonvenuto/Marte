@@ -59,47 +59,37 @@ pub const Lex = struct {
 
     pub fn numbers(content: []const u8, initial_index: usize) !struct { token: Token, index: usize } {
         var index = initial_index;
-        var tok_type = Token.Types.integer;
 
-        var value: i32 = 0;
+        var value: f64 = 0;
         while (index < content.len and std.ascii.isDigit(content[index])) : (index += 1) {
             value *= 10;
-            value += content[index] - '0';
+            value += @floatFromInt(content[index] - ('0'));
         }
 
         // Se tiver um ponto, então é um float e devemos continuar lendo
         if (index < content.len and content[index] == '.') {
-            var decimal_value_i: usize = 0;
+            var decimal_value: f64 = 0;
             const point_index = index;
             index += 1;
+            // Se o valor após o ponto não for um dígito, então é um float mal
+            // formado
             if (!std.ascii.isDigit(content[index])) {
                 return error.FloatMalformed;
             }
             while (index < content.len and std.ascii.isDigit(content[index])) : (index += 1) {
-                decimal_value_i *= 10;
-                decimal_value_i += content[index] - '0';
+                decimal_value *= 10;
+                decimal_value += @floatFromInt(content[index] - '0');
             }
 
-            const decimal_value: f32 = @floatFromInt(decimal_value_i);
             const div: f32 = @floatFromInt(index - point_index);
-            const value_f: f32 = @floatFromInt(value);
-            const float: f32 = (decimal_value / std.math.pow(f32, 10, div - 1)) + value_f;
-
-            tok_type = Token.Types.float;
-            const tok_value = Token.Value{ .float = float };
-            return .{ .token = Token{
-                .value = tok_value,
-                .type = tok_type,
-            }, .index = index - 1 };
+            value = (decimal_value / std.math.pow(f32, 10, div - 1)) + value;
         }
-        // Caso contrário é um inteiro e já lemos tudo
-        else {
-            const tok_value = Token.Value{ .integer = value };
-            return .{ .token = Token{
-                .value = tok_value,
-                .type = tok_type,
-            }, .index = index - 1 };
-        }
+        const tok_type = Token.Types.number;
+        const tok_value = Token.Value{ .number = value };
+        return .{ .token = Token{
+            .value = tok_value,
+            .type = tok_type,
+        }, .index = index - 1 };
     }
 
     pub fn operators(content: []const u8, initial_index: usize) error{UnknownOperator}!struct { usize, Token } {
@@ -131,7 +121,7 @@ pub const Lex = struct {
         const name: []u8 = try allocator.alloc(u8, index - initial_index);
         std.mem.copyForwards(u8, name, content[initial_index..index]);
 
-        return .{ index-1, Token{
+        return .{ index - 1, Token{
             .value = Token.Value{ .variable = name },
             .type = .variable,
         } };

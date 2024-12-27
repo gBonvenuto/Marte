@@ -77,7 +77,7 @@ pub const VariablesHashMap = struct {
         if (variable.type != .variable) {
             return error.VarIsNotVariableToken;
         }
-        if (value.type != .boolean and value.type != .char and value.type != .float and value.type != .integer) {
+        if (value.type != .boolean and value.type != .char and value.type != .number) {
             return error.ValIsNotValueToken;
         }
 
