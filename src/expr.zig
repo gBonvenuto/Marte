@@ -1,6 +1,7 @@
 const std = @import("std");
 const Lex = @import("./lex.zig").Lex;
 const Token = @import("./lex.zig").Lex.Token;
+const hashmap = @import("./varhashmap.zig");
 
 pub const Stack = struct {
     allocator: std.mem.Allocator,
@@ -70,18 +71,27 @@ pub const ExprAnalyzer = struct {
             else => error.UnkownOperator,
         };
     }
-    pub fn evaluate(stack: *Stack) !Token {
+    fn evaluate(stack: *Stack) !Token {
         const op = stack.pop().?.value;
         const val2 = stack.pop().?.value;
-        const val1 = stack.pop().?.value;
+        var val1: Token = undefined;
+        var onlyOneValue = false;
+
+        // Se só tiver um valor pra ser analisado
+        if (stack.peek() == null) {
+            onlyOneValue = true;
+        } else {
+            val1 = stack.pop().?.value;
+        }
+
         if (op.type != .op) {
             return error.opnotoperator;
         }
-        if (val1.type != .integer and val1.type != .float) {
-            return error.val1NotNumber;
-        }
         if (val2.type != .integer and val2.type != .float) {
             return error.val2NotNumber;
+        }
+        if (!onlyOneValue and val1.type != .integer and val1.type != .float) {
+            return error.val1NotNumber;
         }
         switch (op.value.op) {
             .@"+" => {
@@ -98,6 +108,13 @@ pub const ExprAnalyzer = struct {
                 } else unreachable;
             },
             .@"-" => {
+                if (onlyOneValue) {
+                    switch (val2.type) {
+                        .integer => return Token{ .type = .integer, .value = .{ .integer = -val2.value.integer } },
+                        .float => return Token{ .type = .float, .value = .{ .float = -val2.value.float } },
+                        else => unreachable,
+                    }
+                }
                 if (val1.type == .integer and val2.type == .integer) {
                     return Token{ .type = .integer, .value = .{ .integer = val1.value.integer - val2.value.integer } };
                 } else if (val1.type == .float and val2.type == .float) {
@@ -136,18 +153,25 @@ pub const ExprAnalyzer = struct {
                     return Token{ .type = .float, .value = .{ .float = val1.value.float / val2_f } };
                 } else unreachable;
             },
+            .@"=" => {
+                return error.AssignmentInsideExpression;
+            },
             else => {
                 return error.NotImplemented;
             },
         }
     }
-    pub fn analyse(tok_array: []const Token, allocator: std.mem.Allocator) !Token {
+    pub fn analyse(varHashmap: *hashmap.VariablesHashMap, tok_array: []const Token, allocator: std.mem.Allocator) !Token {
         // Vamos ter dois stacks, um que contém a expressão e outro com os caracteres aguardando
         var main = Stack{ .allocator = allocator };
         var waiting = Stack{ .allocator = allocator };
 
         for (tok_array) |token| {
             switch (token.type) {
+                .variable => {
+                    const value = try varHashmap.getVar(token);
+                    try main.push(value);
+                },
                 // Se for um número, ele vai diretamente para o main stack
                 .integer, .float => {
                     try main.push(token);
@@ -207,6 +231,10 @@ pub const ExprAnalyzer = struct {
             const popped = waiting.pop();
             try main.push(popped.?.value);
             try main.push(try evaluate(&main));
+        }
+        // Se tiver mais de um item na main, então a expressão foi mal formada
+        if (main.peek().?.prev != null) {
+            return error.MalformedExpression;
         }
         return main.pop().?.value;
     }

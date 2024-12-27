@@ -123,31 +123,31 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         }
 
         // Se for algo que não conhecemos, então é uma variável
-        i, token = Lex.variables(content, i);
+        i, token = try Lex.variables(content, i, allocator);
     }
     try processLine(arrList, allocator);
 }
 
 fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !void {
     const arr = arrList.items;
-    for (arr, 0..) |token, i| {
+    var i: usize = 0;
+    while (i < arr.len) : (i += 1) {
+        const token = arr[i];
         switch (token.type) {
             .variable => {
                 // Se for apenas uma única variável, então significa que devemos
                 // imprimi-la
                 if (arr.len == 1) {
                     var buf: [50]u8 = undefined;
-                    const value = try variablesHashMap.?.getVar(token);
-                    if (value) |val| {
-                        const val_str: []const u8 = switch (val.type) {
-                            .integer => try std.fmt.bufPrintZ(&buf, "{d} (integer)", .{val.value.integer}),
-                            .float => try std.fmt.bufPrintZ(&buf, "{e} (float)", .{val.value.float}),
-                            .boolean => try std.fmt.bufPrintZ(&buf, "{} (boolean)", .{val.value.boolean}),
-                            .char => try std.fmt.bufPrintZ(&buf, "{c} (char)", .{val.value.char}),
-                            else => return error.UnknownValueType,
-                        };
-                        try stdout.print("{s} = {s}\n", .{ token.value.variable, val_str });
-                    }
+                    const val = try variablesHashMap.?.getVar(token);
+                    const val_str: []const u8 = switch (val.type) {
+                        .integer => try std.fmt.bufPrintZ(&buf, "{d} (integer)", .{val.value.integer}),
+                        .float => try std.fmt.bufPrintZ(&buf, "{e} (float)", .{val.value.float}),
+                        .boolean => try std.fmt.bufPrintZ(&buf, "{} (boolean)", .{val.value.boolean}),
+                        .char => try std.fmt.bufPrintZ(&buf, "{c} (char)", .{val.value.char}),
+                        else => return error.UnknownValueType,
+                    };
+                    try stdout.print("{s} = {s}\n", .{ token.value.variable, val_str });
                 }
             },
             .op => {
@@ -167,7 +167,7 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                             panic("Trying to assign nothing to variable");
                         }
 
-                        const ret = try Expr.ExprAnalyzer.analyse(arr[i + 1 ..], allocator);
+                        const ret = try Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator);
 
                         try variablesHashMap.?.assignVar(arr[i - 1], ret);
                     },

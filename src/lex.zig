@@ -102,7 +102,7 @@ pub const Lex = struct {
         inline for (@typeInfo(Operators).Enum.fields, 0..) |field, i| {
             for (field.name, 0..) |f_char, j| {
                 // Se tiver um caracter diferente, então não é este operador
-                if (j+initial_index >= content.len or content[initial_index + j] != f_char) {
+                if (j + initial_index >= content.len or content[initial_index + j] != f_char) {
                     break;
                 }
                 jndex = j;
@@ -117,15 +117,16 @@ pub const Lex = struct {
         return error.UnknownOperator;
     }
 
-    pub fn variables(content: []const u8, initial_index: usize) struct { usize, Token } {
+    pub fn variables(content: []const u8, initial_index: usize, allocator: std.mem.Allocator) !struct { usize, Token } {
         var index: usize = initial_index;
         while (index < content.len and std.ascii.isAlphabetic(content[index])) {
             index += 1;
         }
 
-        const name: []const u8 = content[initial_index..index];
+        const name: []u8 = try allocator.alloc(u8, index - initial_index);
+        std.mem.copyForwards(u8, name, content[initial_index..index]);
 
-        return .{ index, Token{
+        return .{ index-1, Token{
             .value = Token.Value{ .variable = name },
             .type = .variable,
         } };

@@ -9,13 +9,24 @@ pub const VariablesHashMap = struct {
     map: []?*Node = undefined,
     allocator: std.mem.Allocator,
     pub fn init(allocator: std.mem.Allocator) !VariablesHashMap {
-        const len = 7529;
+        const len = 101;
         var map: []?*Node = try allocator.alloc(?*Node, len);
         for (0..len) |i| {
             map[i] = null;
         }
         return VariablesHashMap{ .map = map, .len = len, .allocator = allocator };
     }
+    pub fn print(self: VariablesHashMap) void {
+        for (self.map) |val| {
+            var node = val;
+            while (node != null) {
+                std.debug.print("{s}={} -> ", .{node.?.name.value.variable, node.?.value.value});
+                node = node.?.next;
+            }
+            std.debug.print("null\n", .{});
+        }
+    }
+
     //TODO:
     //deinit()
 
@@ -77,7 +88,7 @@ pub const VariablesHashMap = struct {
     }
 
     /// Returns the token of the value
-    pub fn getVar(self: VariablesHashMap, variable: Token) !?Token {
+    pub fn getVar(self: VariablesHashMap, variable: Token) !Token {
         if (variable.type != .variable) {
             return error.VarIsNotVariableToken;
         }
@@ -92,7 +103,7 @@ pub const VariablesHashMap = struct {
 
         var node: ?*Node = self.map[hash];
         while (node != null) {
-            if (std.mem.eql(u8, varName, node.?.name.value.variable)) {
+            if (std.mem.eql(u8, node.?.name.value.variable, varName)) {
                 return node.?.value;
             } else {
                 node = node.?.next;
