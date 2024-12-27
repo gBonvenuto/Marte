@@ -59,14 +59,15 @@ pub const Stack = struct {
 };
 
 pub const ExprAnalyzer = struct {
-    // Higher numbers means higher priorities
+    /// Higher numbers means higher priorities
     fn getOpPrecedence(token: Token) !u8 {
         if (token.type != Token.Types.op) {
             return error.NotAnOperator;
         }
         return switch (token.value.op) {
-            .@"+", .@"-" => 1,
-            .@"*", .@"/" => 2,
+            .@">", .@">=", .@"<", .@"<=", .@"==" => 1,
+            .@"+", .@"-" => 2,
+            .@"*", .@"/" => 3,
             //TODO: parentesis
             else => error.UnkownOperator,
         };
@@ -155,6 +156,83 @@ pub const ExprAnalyzer = struct {
             },
             .@"=" => {
                 return error.AssignmentInsideExpression;
+            },
+            .@">" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer > val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float > val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f > val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float > val2_f } };
+                } else unreachable;
+            },
+            .@">=" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer >= val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float >= val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f >= val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float >= val2_f } };
+                } else unreachable;
+            },
+            .@"<" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer < val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float < val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f < val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float < val2_f } };
+                } else unreachable;
+            },
+            .@"<=" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer <= val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float <= val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f <= val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float <= val2_f } };
+                } else unreachable;
+            },
+            .@"==" => {
+                if (val1.type == .integer and val2.type == .integer) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.integer == val2.value.integer } };
+                } else if (val1.type == .float and val2.type == .float) {
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float == val2.value.float } };
+                } else if (val1.type == .integer and val2.type == .float) {
+                    const val1_f: @TypeOf(val2.value.float) = @floatFromInt(val1.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1_f == val2.value.float } };
+                } else if (val1.type == .float and val2.type == .integer) {
+                    const val2_f: @TypeOf(val1.value.float) = @floatFromInt(val2.value.integer);
+                    return Token{ .type = .boolean, .value = .{ .boolean = val1.value.float == val2_f } };
+                } else unreachable;
+            },
+            .@"and" => {
+                if (val1.type == .boolean and val2.type == .boolean) {
+                    return Token{.type = .boolean, .value = .{ .boolean = val1.value.boolean and val2.value.boolean }};
+                }
+                else return error.LocalAndNonBoolean;
+            },
+            .@"or" => {
+                if (val1.type == .boolean and val2.type == .boolean) {
+                    return Token{.type = .boolean, .value = .{ .boolean = val1.value.boolean or val2.value.boolean }};
+                }
+                else return error.LocalAndNonBoolean;
             },
             else => {
                 return error.NotImplemented;

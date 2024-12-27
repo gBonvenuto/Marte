@@ -21,10 +21,17 @@ pub const Lex = struct {
         @"-",
         @"*",
         @"/",
+        @">=",
+        @"<=",
         @"==",
-        @"=",
+        @">",
+        @"<",
+        @"and",
+        @"or",
+        @"!",
         @"(",
         @")",
+        @"=",
     };
     pub const Token = struct {
         value: Value,

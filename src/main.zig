@@ -36,7 +36,7 @@ pub fn main() !void {
         // Abrindo o arquivo
         var file = std.fs.cwd().openFile(f, .{ .mode = .read_only }) catch |err| switch (err) {
             error.FileNotFound => {
-                panic("File Not Found!");
+                panic("File Not Found!", .{});
                 return;
             },
             else => return err,
@@ -156,18 +156,21 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                     .@"=" => {
                         // Verificando se o igual não está no começo da linha
                         if (i <= 0) {
-                            panic("(=) at beginning of line");
+                            panic("(=) at beginning of line", .{});
                         }
 
                         if (arr[i - 1].type != Token.Types.variable) {
-                            panic("Trying to assign value to not a variable");
+                            panic("Trying to assign value to not a variable", .{});
                         }
 
                         if (i >= arr.len) {
-                            panic("Trying to assign nothing to variable");
+                            panic("Trying to assign nothing to variable", .{});
                         }
 
-                        const ret = try Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator);
+                        const ret = Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
+                            error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
+                            else => return err,
+                        };
 
                         try variablesHashMap.?.assignVar(arr[i - 1], ret);
                     },
@@ -179,13 +182,13 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
     }
 }
 
-fn panic(message: []const u8) noreturn {
+fn panic(comptime message: []const u8, args: anytype) noreturn {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     var cham = Chameleon.initRuntime(.{ .allocator = allocator });
     defer cham.deinit();
 
-    cham.red().bold().printOut("\n{s}\n", .{message}) catch {};
+    cham.red().bold().printOut(message, args) catch {};
     std.posix.exit(1);
 
     unreachable;
