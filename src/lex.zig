@@ -37,8 +37,7 @@ pub const Lex = struct {
         value: Value,
         type: Types,
         pub const Value = union(Types) {
-            integer: i32,
-            float: f32,
+            number: f64,
             char: u8,
             boolean: bool,
             op: Operators,
@@ -46,8 +45,7 @@ pub const Lex = struct {
             variable: []const u8, //name
         };
         pub const Types = enum {
-            integer,
-            float,
+            number,
             char,
             boolean,
             op,
