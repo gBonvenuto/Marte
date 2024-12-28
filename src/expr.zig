@@ -6,8 +6,12 @@ const Stack = @import("./stack.zig").Stack;
 
 pub fn analyse(varHashmap: *hashmap.VariablesHashMap, tok_array: []const Token, allocator: std.mem.Allocator) !Token {
     // Vamos ter dois stacks, um que contém a expressão e outro com os caracteres aguardando
-    var main = Stack{ .allocator = allocator };
-    var waiting = Stack{ .allocator = allocator };
+    var main = Stack(Token).init(allocator);
+    var waiting = Stack(Token).init(allocator);
+    // defer {
+    //     main.deinit();
+    //     waiting.deinit();
+    // }
 
     for (tok_array) |token| {
         switch (token.type) {
@@ -89,7 +93,7 @@ pub fn analyse(varHashmap: *hashmap.VariablesHashMap, tok_array: []const Token, 
     return main.pop().?.value;
 }
 
-fn evaluate(stack: *Stack) !Token {
+fn evaluate(stack: *Stack(Token)) !Token {
     const op = stack.pop().?.value;
     const val2 = stack.pop().?.value;
     var val1: Token = undefined;
