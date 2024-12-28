@@ -177,26 +177,45 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?
 fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !void {
     const arr = arrList.items;
     var i: usize = 0;
+
     while (i < arr.len) : (i += 1) {
         const token = arr[i];
         switch (token.type) {
             .keyword => {
                 switch (token.value.keyword) {
-                    .@"if", .@"for", .@"while", .@"elif" => {
+                    // WARNING: Acho que isso aqui não vai funcionar. Acho que preciso
+                    // criar um stack de blocos de alguma forma
+                    .@"if", .@"for", .@"while", .elif => {
+                        std.log.debug("token = {}\n", .{token});
                         const ret = Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
                             error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
                             error.MissingThenOrDoKeyword => panic("Did not find \"do\" or \"then\" keyword", .{}),
                             else => return err,
                         };
-                        try variablesHashMap.?.assignVar(arr[i - 1], ret);
+                        std.log.debug("ret = {}\n", .{ret});
+                        if (ret.type != .boolean) {
+                            panic("Avaliando {}, (não booleano)", .{ret});
+                        }
+                        // Se a condição é falsa, então pulamos tudo o que está dentro do bloco
+                        if (ret.value.boolean == false) {
+                            var t: Token = token;
+                            while (!(t.type == .keyword and t.value.keyword == .end)) {
+                                i += 1;
+                                t = arrList.items[i];
+                            }
+                        }
+                        // Se a condição é verdadeira, então seguimos normalmente
                     },
-                    .@"else" => {},
                     // TODO:
-                    .@"end", .@"done" => {
+                    .@"else" => {
+                        panic("Unexpected \"else\" keyword\n", .{});
+                    },
+                    .end => {
+                        panic("Unexpected \"end\" keyword\n", .{});
                     },
                     .@"break" => {},
-                    .@"continue" =>{},
-                    .@"do", .@"then" => {},
+                    .@"continue" => {},
+                    .do, .then => {},
                 }
             },
             .variable => {

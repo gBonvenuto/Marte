@@ -12,7 +12,6 @@ pub const Lex = struct {
         @"end",
         @"break",
         @"continue",
-        @"done",
         @"do",
     };
     pub const Operators = enum {
