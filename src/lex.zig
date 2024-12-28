@@ -3,18 +3,17 @@ const std = @import("std");
 /// Este struct possui diversas funções para análise lexical
 pub const Lex = struct {
     pub const Keywords = enum {
-        pub fn getKeyword(str: []const u8) !Keywords {
-            inline for (@typeInfo(Keywords).Enum.fields, 0..) |field, i| {
-                if (std.mem.eql(u8, str, field.name)) {
-                    const ret: Keywords = @enumFromInt(i);
-                    return ret;
-                }
-                return error.EnumFieldNotFound;
-            }
-        }
         @"if",
-        then,
+        @"elif",
+        @"then",
         @"else",
+        @"for",
+        @"while",
+        @"end",
+        @"break",
+        @"continue",
+        @"done",
+        @"do",
     };
     pub const Operators = enum {
         @"+",
@@ -90,6 +89,27 @@ pub const Lex = struct {
             .value = tok_value,
             .type = tok_type,
         }, .index = index - 1 };
+    }
+
+    pub fn keywords(content: []const u8, initial_index: usize) struct { usize, ?Token } {
+        var jndex: usize = 0;
+        inline for (@typeInfo(Keywords).Enum.fields, 0..) |field, i| {
+            for (field.name, 0..) |f_char, j| {
+                // Se tiver um caracter diferente, então não é este operador
+                if (j + initial_index >= content.len or content[initial_index + j] != f_char) {
+                    break;
+                }
+                jndex = j;
+            }
+            // Se terminamos o loop sem break então encontramos o nosso operador
+            else {
+                const keyword: Keywords = @enumFromInt(i);
+                return .{ initial_index + jndex, Token{ .value = .{ .keyword = keyword }, .type = .keyword } };
+            }
+        }
+        // Se chegarmos aqui é porque não encontramos nosso operador, então
+        // devolvemos um token nulo e o index inicial
+        return .{initial_index, null};
     }
 
     pub fn operators(content: []const u8, initial_index: usize) error{UnknownOperator}!struct { usize, Token } {

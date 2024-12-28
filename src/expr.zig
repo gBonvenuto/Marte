@@ -69,7 +69,7 @@ pub const ExprAnalyzer = struct {
             .@"+", .@"-" => 2,
             .@"*", .@"/" => 3,
             //TODO: parentesis
-            else => error.UnkownOperator,
+            else => error.UnknownOperator,
         };
     }
     fn evaluate(stack: *Stack) !Token {
@@ -153,6 +153,13 @@ pub const ExprAnalyzer = struct {
 
         for (tok_array) |token| {
             switch (token.type) {
+                .keyword => {
+                    if (token.value.keyword == .then or token.value.keyword == .@"do") {
+                        break;
+                    } else {
+                        return error.MissingThenOrDoKeyword;
+                    }
+                },
                 .variable => {
                     const value = try varHashmap.getVar(token);
                     try main.push(value);
@@ -208,7 +215,7 @@ pub const ExprAnalyzer = struct {
                         }
                     }
                 },
-                else => return error.UnkownToken,
+                else => return error.UnknownToken,
             }
         }
         // Agora que terminamos os tokens, vamos liberar o waiting stack

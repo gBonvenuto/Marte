@@ -49,29 +49,46 @@ pub fn main() !void {
         // Deixando o conteúdo imutável (boas práticas)
         const file_content: []const u8 = content;
 
-        tokenizer(file_content, allocator) catch |err| switch (err) {
-            else => return err,
-        };
+        _ = try tokenizer(file_content, allocator, null);
     } else {
         variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
         try interactive(allocator);
     }
 }
 
+var interactive_mode = false;
+var insideBlock = false;
 fn interactive(allocator: std.mem.Allocator) !void {
+    interactive_mode = true;
     try stdout.print("Marte 0.0.1 Copyright (C) 2024 Giancarlo Bonvenuto\n", .{});
-
+    var arrList: ?std.ArrayList(Token) = null;
     while (true) {
-        try stdout.print("> ", .{});
-        var buf: [1000]u8 = undefined;
-        const line = try stdin.readUntilDelimiter(&buf, '\n');
-        try tokenizer(line, allocator);
+        if (arrList) |list| {
+            std.log.info("insideBlock = true", .{});
+            try stdout.print(">> ", .{});
+            var buf: [1000]u8 = undefined;
+            const line = try stdin.readUntilDelimiter(&buf, '\n');
+            arrList = try tokenizer(line, allocator, list);
+        } else {
+            try stdout.print("> ", .{});
+            var buf: [1000]u8 = undefined;
+            const line = try stdin.readUntilDelimiter(&buf, '\n');
+            arrList = try tokenizer(line, allocator, null);
+        }
     }
 }
 
-pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
+pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?std.ArrayList(Token)) !?std.ArrayList(Token) {
     var i: usize = 0;
-    var arrList = std.ArrayList(Lex.Token).init(allocator);
+
+    var arrList: std.ArrayList(Token) = undefined;
+
+    if (arrayList == null) {
+        arrList = std.ArrayList(Token).init(allocator);
+    } else {
+        arrList = arrayList.?;
+    }
+
     var token: ?Lex.Token = null;
 
     while (i < content.len) : (i += 1) {
@@ -97,11 +114,17 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
         // Se for whitespace a gente ignora
         if (std.ascii.isWhitespace(char)) {
 
-            // Se o whitespace for um \n, então vemos se tem uma expressão pendente
+            //Se o whitespace for um \n, então vemos se tem uma expressão pendente
             if (char == '\n' or char == 0) {
-                try processLine(arrList, allocator);
+                if (insideBlock) {
+                    return arrList;
+                } else {
+                    try processLine(arrList, allocator);
+                    continue;
+                }
+            } else {
+                continue;
             }
-            continue;
         }
 
         // Se for um número, aplicamos um parser próprio
@@ -122,10 +145,33 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator) !void {
             continue;
         }
 
+        // Se for um caracter de keyword, tratamos aqui
+        i, token = Lex.keywords(content, i);
+        // Se já tivermos encontrado o token continuamos o loop
+        if (token != null) {
+            switch (token.?.value.keyword) {
+                // Se for algum desses então estamos entrando em um bloco
+                // e a linha agora não termina na quebra de linha, mas sim no
+                // `end`
+                .@"if", .@"for", .@"while", .@"else" => {
+                    insideBlock = true;
+                },
+                .end => insideBlock = false,
+                else => {},
+            }
+            continue;
+        }
+
         // Se for algo que não conhecemos, então é uma variável
         i, token = try Lex.variables(content, i, allocator);
     }
-    try processLine(arrList, allocator);
+    if (insideBlock) {
+        return arrList;
+    } else {
+        try processLine(arrList, allocator);
+        arrList.deinit();
+        return null;
+    }
 }
 
 fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !void {
@@ -134,6 +180,25 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
     while (i < arr.len) : (i += 1) {
         const token = arr[i];
         switch (token.type) {
+            .keyword => {
+                switch (token.value.keyword) {
+                    .@"if", .@"for", .@"while", .@"elif" => {
+                        const ret = Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
+                            error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
+                            error.MissingThenOrDoKeyword => panic("Did not find \"do\" or \"then\" keyword", .{}),
+                            else => return err,
+                        };
+                        try variablesHashMap.?.assignVar(arr[i - 1], ret);
+                    },
+                    .@"else" => {},
+                    // TODO:
+                    .@"end", .@"done" => {
+                    },
+                    .@"break" => {},
+                    .@"continue" =>{},
+                    .@"do", .@"then" => {},
+                }
+            },
             .variable => {
                 // Se for apenas uma única variável, então significa que devemos
                 // imprimi-la
@@ -142,7 +207,7 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                     const val = try variablesHashMap.?.getVar(token);
                     const val_str: []const u8 = switch (val.type) {
                         .number => blk: {
-                            if (@mod(val.value.number, 1) == 0 ) {
+                            if (@mod(val.value.number, 1) == 0) {
                                 // Inteiro
                                 break :blk try std.fmt.bufPrintZ(&buf, "{d}", .{val.value.number});
                             } else {
