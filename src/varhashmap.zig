@@ -3,8 +3,8 @@ const std = @import("std");
 const Lex = @import("./lex.zig").Lex;
 const Token = Lex.Token;
 
+const Node = struct { value: Token = undefined, name: Token = undefined, next: ?*Node = null };
 pub const VariablesHashMap = struct {
-    pub const Node = struct { value: Token = undefined, name: Token = undefined, next: ?*Node = null };
     len: usize,
     map: []?*Node = undefined,
     allocator: std.mem.Allocator,

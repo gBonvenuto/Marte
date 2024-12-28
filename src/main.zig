@@ -8,6 +8,7 @@ const Chameleon = @import("chameleon");
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
 var variablesHashMap: ?hashmap.VariablesHashMap = null;
+var scopesHashMap: ?hashmap.VariablesHashMap = null;
 
 fn get_filename(args: [][]u8) ![]const u8 {
     if (args.len < 2) {
@@ -187,7 +188,7 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                     // criar um stack de blocos de alguma forma
                     .@"if", .@"for", .@"while", .elif => {
                         std.log.debug("token = {}\n", .{token});
-                        const ret = Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
+                        const ret = Expr.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
                             error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
                             error.MissingThenOrDoKeyword => panic("Did not find \"do\" or \"then\" keyword", .{}),
                             else => return err,
@@ -257,7 +258,7 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                             panic("Trying to assign nothing to variable", .{});
                         }
 
-                        const ret = Expr.ExprAnalyzer.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
+                        const ret = Expr.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
                             error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
                             else => return err,
                         };
