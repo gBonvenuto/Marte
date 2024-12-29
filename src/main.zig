@@ -5,12 +5,12 @@ const Token = @import("./lex.zig").Lex.Token;
 const Expr = @import("./expr.zig");
 const Chameleon = @import("chameleon");
 const Scope = @import("./scopes.zig").Scope;
-const ScopStack = @import("./scopes.zig").ScopeStack;
+const ScopeStack = @import("./scopes.zig").ScopeStack;
 const Stack = @import("./stack.zig");
 
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
-var scopesStack: ScopStack = undefined;
+var scopesStack: ScopeStack = undefined;
 
 fn get_filename(args: [][]u8) ![]const u8 {
     if (args.len < 2) {
@@ -58,34 +58,45 @@ pub fn main() !void {
 }
 
 var interactive_mode = false;
-var insideBlock = false;
+var blockCount: usize = 0;
 fn interactive(allocator: std.mem.Allocator) !void {
     interactive_mode = true;
     try stdout.print("Marte 0.0.1 Copyright (C) 2024 Giancarlo Bonvenuto\n", .{});
-    var arrList: ?std.ArrayList(Token) = null;
-    scopesStack = ScopStack.init(allocator);
-    try scopesStack.pushEmpty(0);
+    var arrList: std.ArrayList(Token) = undefined;
+    scopesStack = ScopeStack.init(allocator);
+    try scopesStack.pushEmpty(null, undefined, .none);
+    var outerScope = scopesStack.peek().?;
     defer {
         scopesStack.deinit();
     }
     while (true) {
-        // If arrList is not null, then we are inside a block
-        if (arrList) |list| {
-            std.log.info("insideBlock = true", .{});
+        // Se o blockCount for maior que zero, então estamos dentro de um bloco
+        if (blockCount > 0) {
+            // If arrList is not null, then we are inside a block
             try stdout.print(">> ", .{});
             var buf: [1000]u8 = undefined;
             const line = try stdin.readUntilDelimiter(&buf, '\n');
-            arrList = try tokenizer(line, allocator, list);
-        } else {
+            arrList = try tokenizer(line, allocator, arrList);
+        }
+        // Se o blockCount for menor que zero então temos muitos tokens end
+        else if (blockCount < 0) {
+            panic("Unexpected \"end\"", .{});
+        }
+        // Se o blockCount for zero, então já estamos no scopo externo
+        else {
             try stdout.print("> ", .{});
             var buf: [1000]u8 = undefined;
             const line = try stdin.readUntilDelimiter(&buf, '\n');
             arrList = try tokenizer(line, allocator, null);
         }
+        if (blockCount == 0) {
+            outerScope.code = arrList.items;
+            _ = try outerScope.processScope(&scopesStack, std.io.getStdOut());
+        }
     }
 }
 
-pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?std.ArrayList(Token)) !?std.ArrayList(Token) {
+pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?std.ArrayList(Token)) !std.ArrayList(Token) {
     var i: usize = 0;
 
     var arrList: std.ArrayList(Token) = undefined;
@@ -120,18 +131,7 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?
 
         // Se for whitespace a gente ignora
         if (std.ascii.isWhitespace(char)) {
-
-            //Se o whitespace for um \n, então vemos se tem uma expressão pendente
-            if (char == '\n' or char == 0) {
-                if (insideBlock) {
-                    return arrList;
-                } else {
-                    try processLine(arrList, allocator);
-                    continue;
-                }
-            } else {
-                continue;
-            }
+            continue;
         }
 
         // Se for um número, aplicamos um parser próprio
@@ -161,9 +161,11 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?
                 // e a linha agora não termina na quebra de linha, mas sim no
                 // `end`
                 .@"if", .@"for", .@"while", .@"else" => {
-                    insideBlock = true;
+                    blockCount += 1;
                 },
-                .end => insideBlock = false,
+                .end => {
+                    blockCount -= 1;
+                },
                 else => {},
             }
             continue;
@@ -172,114 +174,7 @@ pub fn tokenizer(content: []const u8, allocator: std.mem.Allocator, arrayList: ?
         // Se for algo que não conhecemos, então é uma variável
         i, token = try Lex.variables(content, i, allocator);
     }
-    if (insideBlock) {
-        return arrList;
-    } else {
-        try processLine(arrList, allocator);
-        arrList.deinit();
-        return null;
-    }
-}
-
-fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !void {
-    const arr = arrList.items;
-    var i: usize = 0;
-
-    while (i < arr.len) : (i += 1) {
-        const token = arr[i];
-        switch (token.type) {
-            .keyword => {
-                switch (token.value.keyword) {
-                    .@"if", .@"for", .@"while", .elif => {
-
-                        try scopesStack.pushEmpty(i);
-
-                        var result_token: Token = undefined;
-
-                        result_token = Expr.analyse(&scopesStack, arr[i + 1 ..], allocator) catch |err| switch (err) {
-                            error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
-                            error.MissingThenOrDoKeyword => panic("Did not find \"do\" or \"then\" keyword", .{}),
-                            else => return err,
-                        };
-
-                        std.log.debug("ret = {}\n", .{result_token});
-                        if (result_token.type != .boolean) {
-                            panic("Avaliando {}, (não booleano)", .{result_token});
-                        }
-                        // Se a condição é falsa, então pulamos tudo o que está dentro do bloco
-                        if (result_token.value.boolean == false) {
-                            var t: Token = token;
-                            while (!(t.type == .keyword and t.value.keyword == .end)) {
-                                i += 1;
-                                t = arrList.items[i];
-                            }
-                        }
-                        // Se a condição é verdadeira, então seguimos normalmente
-                    },
-                    // TODO:
-                    .@"else" => {
-                        panic("Unexpected \"else\" keyword\n", .{});
-                    },
-                    .end => {
-                        panic("Unexpected \"end\" keyword\n", .{});
-                    },
-                    .@"break" => {},
-                    .@"continue" => {},
-                    .do, .then => {},
-                }
-            },
-            .variable => {
-                // Se for apenas uma única variável, então significa que devemos
-                // imprimi-la
-                if (arr.len == 1) {
-                    var buf: [50]u8 = undefined;
-                    const val = try scopesStack.getVar(token, allocator);
-                    const val_str: []const u8 = switch (val.type) {
-                        .number => blk: {
-                            if (@mod(val.value.number, 1) == 0) {
-                                // Inteiro
-                                break :blk try std.fmt.bufPrintZ(&buf, "{d}", .{val.value.number});
-                            } else {
-                                break :blk try std.fmt.bufPrintZ(&buf, "{e}", .{val.value.number});
-                            }
-                        },
-                        .boolean => try std.fmt.bufPrintZ(&buf, "{} (boolean)", .{val.value.boolean}),
-                        .char => try std.fmt.bufPrintZ(&buf, "{c} (char)", .{val.value.char}),
-                        else => return error.UnknownValueType,
-                    };
-                    try stdout.print("{s} = {s}\n", .{ token.value.variable, val_str });
-                }
-            },
-            .op => {
-                switch (token.value.op) {
-                    // Um igual significa que é um assignment
-                    .@"=" => {
-                        // Verificando se o igual não está no começo da linha
-                        if (i <= 0) {
-                            panic("(=) at beginning of line", .{});
-                        }
-
-                        if (arr[i - 1].type != Token.Types.variable) {
-                            panic("Trying to assign value to not a variable", .{});
-                        }
-
-                        if (i >= arr.len) {
-                            panic("Trying to assign nothing to variable", .{});
-                        }
-
-                        const ret = Expr.analyse(&scopesStack, arr[i + 1 ..], allocator) catch |err| switch (err) {
-                            error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
-                            else => return err,
-                        };
-
-                        try scopesStack.assignVar(arr[i - 1], ret);
-                    },
-                    else => {},
-                }
-            },
-            else => {},
-        }
-    }
+    return arrList;
 }
 
 fn panic(comptime message: []const u8, args: anytype) noreturn {

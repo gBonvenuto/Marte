@@ -15,12 +15,13 @@ pub fn analyse(scopeStack: *ScopeStack, tok_array: []const Token, allocator: std
     //     waiting.deinit();
     // }
 
-    for (tok_array) |token| {
+    outer_for: for (tok_array) |token| {
         switch (token.type) {
             .keyword => {
                 if (token.value.keyword == .then or token.value.keyword == .do) {
-                    break;
+                    break :outer_for;
                 } else {
+                    std.debug.print("encountered {any} inside expression", .{token.value.keyword});
                     return error.MissingThenOrDoKeyword;
                 }
             },

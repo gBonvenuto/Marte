@@ -43,7 +43,7 @@ pub fn Stack(comptime T: type) type {
 
             var counter: usize = 0;
             while (node != null and counter < 5) {
-                std.debug.print("{} -> ", .{node.?.value.value});
+                std.debug.print("{} -> ", .{node.?.value});
                 node = node.?.prev;
                 counter += 1;
             }
