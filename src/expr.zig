@@ -3,8 +3,10 @@ const Lex = @import("./lex.zig").Lex;
 const Token = @import("./lex.zig").Lex.Token;
 const hashmap = @import("./varhashmap.zig");
 const Stack = @import("./stack.zig").Stack;
+const Scope = @import("./scopes.zig").Scope;
+const ScopeStack= @import("./scopes.zig").ScopeStack;
 
-pub fn analyse(varHashmap: *hashmap.VariablesHashMap, tok_array: []const Token, allocator: std.mem.Allocator) !Token {
+pub fn analyse(scopeStack: *ScopeStack, tok_array: []const Token, allocator: std.mem.Allocator) !Token {
     // Vamos ter dois stacks, um que contém a expressão e outro com os caracteres aguardando
     var main = Stack(Token).init(allocator);
     var waiting = Stack(Token).init(allocator);
@@ -23,7 +25,7 @@ pub fn analyse(varHashmap: *hashmap.VariablesHashMap, tok_array: []const Token, 
                 }
             },
             .variable => {
-                const value = try varHashmap.getVar(token);
+                const value = try scopeStack.getVar(token, allocator);
                 try main.push(value);
             },
             // Se for um número, ele vai diretamente para o main stack

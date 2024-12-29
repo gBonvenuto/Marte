@@ -16,6 +16,10 @@ pub const VariablesHashMap = struct {
         }
         return VariablesHashMap{ .map = map, .len = len, .allocator = allocator };
     }
+    //TODO:
+    //deinit()
+    pub fn deinit() void {
+    }
     pub fn print(self: VariablesHashMap) void {
         for (self.map) |val| {
             var node = val;
@@ -27,8 +31,6 @@ pub const VariablesHashMap = struct {
         }
     }
 
-    //TODO:
-    //deinit()
 
     fn hashInsert(self: VariablesHashMap, node: Node) !void {
         var hash: usize = 0;

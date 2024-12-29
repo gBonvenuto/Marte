@@ -1,14 +1,16 @@
 const std = @import("std");
-const hashmap = @import("./varhashmap.zig");
+const VariablesHashMap = @import("./varhashmap.zig").VariablesHashMap;
 const Lex = @import("./lex.zig").Lex;
 const Token = @import("./lex.zig").Lex.Token;
 const Expr = @import("./expr.zig");
 const Chameleon = @import("chameleon");
+const Scope = @import("./scopes.zig").Scope;
+const ScopStack = @import("./scopes.zig").ScopeStack;
+const Stack = @import("./stack.zig");
 
 const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
-var variablesHashMap: ?hashmap.VariablesHashMap = null;
-var scopesHashMap: ?hashmap.VariablesHashMap = null;
+var scopesStack: ScopStack = undefined;
 
 fn get_filename(args: [][]u8) ![]const u8 {
     if (args.len < 2) {
@@ -33,7 +35,6 @@ pub fn main() !void {
     };
 
     if (file_name) |f| {
-        variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
         // Abrindo o arquivo
         var file = std.fs.cwd().openFile(f, .{ .mode = .read_only }) catch |err| switch (err) {
             error.FileNotFound => {
@@ -52,7 +53,6 @@ pub fn main() !void {
 
         _ = try tokenizer(file_content, allocator, null);
     } else {
-        variablesHashMap = try hashmap.VariablesHashMap.init(allocator);
         try interactive(allocator);
     }
 }
@@ -63,7 +63,13 @@ fn interactive(allocator: std.mem.Allocator) !void {
     interactive_mode = true;
     try stdout.print("Marte 0.0.1 Copyright (C) 2024 Giancarlo Bonvenuto\n", .{});
     var arrList: ?std.ArrayList(Token) = null;
+    scopesStack = ScopStack.init(allocator);
+    try scopesStack.pushEmpty(0);
+    defer {
+        scopesStack.deinit();
+    }
     while (true) {
+        // If arrList is not null, then we are inside a block
         if (arrList) |list| {
             std.log.info("insideBlock = true", .{});
             try stdout.print(">> ", .{});
@@ -184,21 +190,24 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
         switch (token.type) {
             .keyword => {
                 switch (token.value.keyword) {
-                    // WARNING: Acho que isso aqui não vai funcionar. Acho que preciso
-                    // criar um stack de blocos de alguma forma
                     .@"if", .@"for", .@"while", .elif => {
-                        std.log.debug("token = {}\n", .{token});
-                        const ret = Expr.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
+
+                        try scopesStack.pushEmpty(i);
+
+                        var result_token: Token = undefined;
+
+                        result_token = Expr.analyse(&scopesStack, arr[i + 1 ..], allocator) catch |err| switch (err) {
                             error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
                             error.MissingThenOrDoKeyword => panic("Did not find \"do\" or \"then\" keyword", .{}),
                             else => return err,
                         };
-                        std.log.debug("ret = {}\n", .{ret});
-                        if (ret.type != .boolean) {
-                            panic("Avaliando {}, (não booleano)", .{ret});
+
+                        std.log.debug("ret = {}\n", .{result_token});
+                        if (result_token.type != .boolean) {
+                            panic("Avaliando {}, (não booleano)", .{result_token});
                         }
                         // Se a condição é falsa, então pulamos tudo o que está dentro do bloco
-                        if (ret.value.boolean == false) {
+                        if (result_token.value.boolean == false) {
                             var t: Token = token;
                             while (!(t.type == .keyword and t.value.keyword == .end)) {
                                 i += 1;
@@ -224,7 +233,7 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                 // imprimi-la
                 if (arr.len == 1) {
                     var buf: [50]u8 = undefined;
-                    const val = try variablesHashMap.?.getVar(token);
+                    const val = try scopesStack.getVar(token, allocator);
                     const val_str: []const u8 = switch (val.type) {
                         .number => blk: {
                             if (@mod(val.value.number, 1) == 0) {
@@ -258,12 +267,12 @@ fn processLine(arrList: std.ArrayList(Token), allocator: std.mem.Allocator) !voi
                             panic("Trying to assign nothing to variable", .{});
                         }
 
-                        const ret = Expr.analyse(&variablesHashMap.?, arr[i + 1 ..], allocator) catch |err| switch (err) {
+                        const ret = Expr.analyse(&scopesStack, arr[i + 1 ..], allocator) catch |err| switch (err) {
                             error.VarNonexistent => panic("Trying to evaluate non existent variable", .{}),
                             else => return err,
                         };
 
-                        try variablesHashMap.?.assignVar(arr[i - 1], ret);
+                        try scopesStack.assignVar(arr[i - 1], ret);
                     },
                     else => {},
                 }
