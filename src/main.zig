@@ -8,8 +8,8 @@ const Scope = @import("./scopes.zig").Scope;
 const ScopeStack = @import("./scopes.zig").ScopeStack;
 const Stack = @import("./stack.zig");
 
-const stdin = std.io.getStdIn().reader();
-const stdout = std.io.getStdOut().writer();
+pub const stdin = std.io.getStdIn().reader();
+pub const stdout = std.io.getStdOut().writer();
 var scopesStack: ScopeStack = undefined;
 
 fn get_filename(args: [][]u8) ![]const u8 {
@@ -91,7 +91,7 @@ fn interactive(allocator: std.mem.Allocator) !void {
         }
         if (blockCount == 0) {
             outerScope.code = arrList.items;
-            _ = try outerScope.processScope(&scopesStack, std.io.getStdOut());
+            _ = try outerScope.processScope(&scopesStack);
         }
     }
 }

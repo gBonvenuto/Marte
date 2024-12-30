@@ -4,6 +4,32 @@ const Stack = @import("./stack.zig");
 const Token = @import("lex.zig").Lex.Token;
 const Expr = @import("./expr.zig");
 
+const stdout = @import("./main.zig").stdout;
+
+const Error = error{
+    OutOfMemory,
+    UnknownOperator,
+    UnknownToken,
+    UnknownValueType,
+    MissingThenKeyword,
+    MissingThenOrDoKeyword,
+    MissingEndKeyword,
+    EqualBeginningOfLine,
+    VarNonexistent,
+    VarIsNotVariableToken,
+    ValIsNotValueToken,
+    NotAnOperator,
+    ValNotNumber,
+    AssignmentInsideExpression,
+    AssigningValueToNonVariable,
+    AssigningNothingToVariable,
+    LocalAndNonBoolean,
+    MalformedExpression,
+    NotImplemented,
+    ExpectedBooleanForCondition,
+    NoScopeOnStack,
+};
+
 pub const Scope = struct {
     allocator: std.mem.Allocator,
     varhashmap: VariablesHashMap,
@@ -34,25 +60,7 @@ pub const Scope = struct {
         self.varhashmap.deinit();
     }
 
-    /// Returns true if the scope was executed and false if
-    /// it was skipped
-    pub fn processScope(self: *@This(), scopesStack: *ScopeStack, stdout_f: std.fs.File) !bool {
-        const stdout = stdout_f.writer();
-        // Verificando se a condição é verdadeira
-        switch (self.type) {
-            .@"if", .elif, .@"for", .@"while" => {
-                const cond_ret = try Expr.analyse(scopesStack, self.condition.?, self.allocator);
-                if (cond_ret.type == .boolean) {
-                    if (!cond_ret.value.boolean) {
-                        return false;
-                    }
-                } else {
-                    return error.ExpectedBooleanForCondition;
-                }
-            },
-            .none, .@"else", .function => {},
-        }
-
+    pub fn runCode(self: *@This(), scopesStack: *ScopeStack) Error!void {
         // Executando o código
         const arr = self.code;
         var i: usize = 0;
@@ -74,7 +82,7 @@ pub const Scope = struct {
                             if (i == arr.len) {
                                 return error.MissingThenKeyword;
                             }
-                            if (arr[i].value.keyword == .@"then") {
+                            if (arr[i].value.keyword == .then) {
                                 condition = arr[initial_index..i];
                             }
 
@@ -87,19 +95,19 @@ pub const Scope = struct {
 
                             var blockCount: usize = 0;
 
-                            while (i < arr.len) : (i +=1){
+                            while (i < arr.len) : (i += 1) {
                                 if (arr[i].type == .keyword) {
                                     switch (arr[i].value.keyword) {
                                         .@"if" => {
                                             blockCount += 1;
                                         },
-                                        .@"end" => {
+                                        .end => {
                                             if (blockCount == 0) {
                                                 break;
                                             }
                                             blockCount -= 1;
                                         },
-                                        else => {}
+                                        else => {},
                                     }
                                 }
                             }
@@ -116,9 +124,65 @@ pub const Scope = struct {
 
                             try scopesStack.pushEmpty(condition, code, .@"if");
                             var ifScope = scopesStack.peek();
-                            _ = try ifScope.?.processScope(scopesStack, stdout_f);
+                            _ = try ifScope.?.processScope(scopesStack);
                         },
-                        else => return error.NotImplemented
+                        .@"while" => {
+                            // Primeiro procuramos a keyword do
+                            i += 1;
+                            var condition: []const Token = undefined;
+                            var initial_index = i;
+
+                            while (i < arr.len and arr[i].type != .keyword) {
+                                i += 1;
+                            }
+                            if (i == arr.len) {
+                                return error.MissingThenKeyword;
+                            }
+                            if (arr[i].value.keyword == .do) {
+                                condition = arr[initial_index..i];
+                            }
+
+                            // Agora que obtivemos a condição, vamos obter o código
+                            // dentro do escopo
+
+                            i += 1;
+                            initial_index = i;
+                            var code: []const Token = undefined;
+
+                            var blockCount: usize = 0;
+
+                            while (i < arr.len) : (i += 1) {
+                                if (arr[i].type == .keyword) {
+                                    switch (arr[i].value.keyword) {
+                                        .@"if" => {
+                                            blockCount += 1;
+                                        },
+                                        .end => {
+                                            if (blockCount == 0) {
+                                                break;
+                                            }
+                                            blockCount -= 1;
+                                        },
+                                        else => {},
+                                    }
+                                }
+                            }
+
+                            if (i == arr.len or blockCount > 0) {
+                                return error.MissingEndKeyword;
+                            }
+
+                            if (blockCount < 0) {
+                                return error.TooManyEndKeywords;
+                            }
+
+                            code = arr[initial_index..i];
+
+                            try scopesStack.pushEmpty(condition, code, .@"while");
+                            var whileScope = scopesStack.peek();
+                            _ = try whileScope.?.processScope(scopesStack);
+                        },
+                        else => return error.NotImplemented,
                     }
                 },
                 .variable => {
@@ -131,16 +195,24 @@ pub const Scope = struct {
                             .number => blk: {
                                 if (@mod(val.value.number, 1) == 0) {
                                     // Inteiro
-                                    break :blk try std.fmt.bufPrintZ(&buf, "{d}", .{val.value.number});
+                                    break :blk std.fmt.bufPrintZ(&buf, "{d}", .{val.value.number}) catch |err| switch (err) {
+                                        error.NoSpaceLeft => "Couldn't parse the value",
+                                    };
                                 } else {
-                                    break :blk try std.fmt.bufPrintZ(&buf, "{e}", .{val.value.number});
+                                    break :blk std.fmt.bufPrintZ(&buf, "{e}", .{val.value.number}) catch |err| switch (err) {
+                                        error.NoSpaceLeft => "Couldn't parse the value",
+                                    };
                                 }
                             },
-                            .boolean => try std.fmt.bufPrintZ(&buf, "{} (boolean)", .{val.value.boolean}),
-                            .char => try std.fmt.bufPrintZ(&buf, "{c} (char)", .{val.value.char}),
+                            .boolean => std.fmt.bufPrintZ(&buf, "{} (boolean)", .{val.value.boolean}) catch |err| switch (err) {
+                                error.NoSpaceLeft => "Couldn't parse the value",
+                            },
+                            .char => std.fmt.bufPrintZ(&buf, "{c} (char)", .{val.value.char}) catch |err| switch (err) {
+                                error.NoSpaceLeft => "Couldn't parse the value",
+                            },
                             else => return error.UnknownValueType,
                         };
-                        try stdout.print("{s} = {s}\n", .{ token.value.variable, val_str });
+                        stdout.print("{s} = {s}\n", .{ token.value.variable, val_str }) catch {};
                     }
                 },
 
@@ -174,8 +246,52 @@ pub const Scope = struct {
                 else => {},
             }
         }
+    }
 
-        return true;
+    /// Returns true if the scope was executed and false if
+    /// it was skipped
+    pub fn processScope(self: *@This(), scopesStack: *ScopeStack) Error!void {
+        // Verificando se a condição é verdadeira
+        switch (self.type) {
+            .@"if",
+            .elif,
+            .@"for",
+            => {
+                const cond_ret = try Expr.analyse(scopesStack, self.condition.?, self.allocator);
+                if (cond_ret.type == .boolean) {
+                    if (!cond_ret.value.boolean) {
+                        return;
+                    }
+                } else {
+                    return error.ExpectedBooleanForCondition;
+                }
+                try self.runCode(scopesStack);
+            },
+            // TODO: fazer ele repetir o código de alguma forma
+            .@"while" => {
+                while (true) {
+                    const cond_ret = try Expr.analyse(scopesStack, self.condition.?, self.allocator);
+                    if (cond_ret.type == .boolean) {
+                        if (!cond_ret.value.boolean) {
+                            break;
+                        }
+                    } else {
+                        return error.ExpectedBooleanForCondition;
+                    }
+                    if (cond_ret.type == .boolean) {
+                        if (!cond_ret.value.boolean) {
+                            return;
+                        }
+                    } else {
+                        return error.ExpectedBooleanForCondition;
+                    }
+                    try self.runCode(scopesStack);
+                }
+            },
+            .none, .@"else", .function => {
+                try self.runCode(scopesStack);
+            },
+        }
     }
 };
 
@@ -261,7 +377,7 @@ pub const ScopeStack = struct {
         unreachable;
     }
 
-    pub fn assignVar(self: @This(), variable: Token, value: Token) !void {
+    pub fn assignVar(self: @This(), variable: Token, value: Token) Error!void {
         const topScope = self.peek();
         if (topScope != null) {
             try topScope.?.varhashmap.assignVar(variable, value);

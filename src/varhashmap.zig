@@ -3,6 +3,13 @@ const std = @import("std");
 const Lex = @import("./lex.zig").Lex;
 const Token = Lex.Token;
 
+pub const Error = error{
+    OutOfMemory,
+    VarIsNotVariableToken,
+    ValIsNotValueToken,
+    VarNonexistent,
+};
+
 const Node = struct { value: Token = undefined, name: Token = undefined, next: ?*Node = null };
 pub const VariablesHashMap = struct {
     len: usize,
@@ -32,10 +39,10 @@ pub const VariablesHashMap = struct {
     }
 
 
-    fn hashInsert(self: VariablesHashMap, node: Node) !void {
+    fn hashInsert(self: VariablesHashMap, node: Node) Error!void {
         var hash: usize = 0;
         if (node.name.type != .variable) {
-            return error.NameNotVariableToken;
+            return error.VarIsNotVariableToken;
         }
         for (node.name.value.variable) |char| {
             hash += char;
@@ -75,7 +82,7 @@ pub const VariablesHashMap = struct {
     // fn hashRemove() !void {}
 
     /// Assign variable
-    pub fn assignVar(self: VariablesHashMap, variable: Token, value: Token) !void {
+    pub fn assignVar(self: VariablesHashMap, variable: Token, value: Token) Error!void {
         if (variable.type != .variable) {
             return error.VarIsNotVariableToken;
         }

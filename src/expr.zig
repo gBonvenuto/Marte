@@ -4,9 +4,26 @@ const Token = @import("./lex.zig").Lex.Token;
 const hashmap = @import("./varhashmap.zig");
 const Stack = @import("./stack.zig").Stack;
 const Scope = @import("./scopes.zig").Scope;
-const ScopeStack= @import("./scopes.zig").ScopeStack;
+const ScopeStack = @import("./scopes.zig").ScopeStack;
 
-pub fn analyse(scopeStack: *ScopeStack, tok_array: []const Token, allocator: std.mem.Allocator) !Token {
+pub const Error = error{
+    OutOfMemory,
+    UnknownOperator,
+    UnknownToken,
+    MissingThenKeyword,
+    VarNonexistent,
+    VarIsNotVariableToken,
+    NotAnOperator,
+    ValNotNumber,
+    AssignmentInsideExpression,
+    LocalAndNonBoolean,
+    MalformedExpression,
+    NotImplemented,
+    ExpectedBooleanForCondition,
+    MissingThenOrDoKeyword,
+};
+
+pub fn analyse(scopeStack: *ScopeStack, tok_array: []const Token, allocator: std.mem.Allocator) Error!Token {
     // Vamos ter dois stacks, um que contém a expressão e outro com os caracteres aguardando
     var main = Stack(Token).init(allocator);
     var waiting = Stack(Token).init(allocator);
@@ -110,13 +127,13 @@ fn evaluate(stack: *Stack(Token)) !Token {
     }
 
     if (op.type != .op) {
-        return error.opnotoperator;
+        return error.NotAnOperator;
     }
     if (val2.type != .number) {
-        return error.val2NotNumber;
+        return error.ValNotNumber;
     }
     if (!onlyOneValue and val1.type != .number) {
-        return error.val1NotNumber;
+        return error.ValNotNumber;
     }
     switch (op.value.op) {
         .@"+" => {
