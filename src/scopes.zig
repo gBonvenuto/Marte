@@ -36,6 +36,7 @@ pub const Scope = struct {
     condition: ?[]const Token,
     code: []const Token,
     type: Type,
+    @"else": ?*Scope = null,
 
     const Type = enum {
         none, // If it's none, then its probably just some code outside a block
@@ -47,17 +48,91 @@ pub const Scope = struct {
         function,
     };
 
-    pub fn init(condition: ?[]const Token, code: []const Token, scope_type: Type, allocator: std.mem.Allocator) !Scope {
+    pub fn init(condition: ?[]const Token, code: []const Token, scope_type: Type, else_scope: ?*Scope,allocator: std.mem.Allocator) !Scope {
         return Scope{
             .allocator = allocator,
             .varhashmap = try VariablesHashMap.init(allocator),
             .condition = condition,
             .code = code,
             .type = scope_type,
+            .@"else" = else_scope,
         };
     }
     pub fn deinit(self: @This()) void {
         self.varhashmap.deinit();
+    }
+
+    fn createIfScope(index: usize, scope_type: Type, arr: []const Token, allocator: std.mem.Allocator) !struct { usize, Scope } {
+        var i: usize = index;
+
+        var condition: ?[]const Token = null;
+        // Se for um if ou elif. Obtemos a condição
+        if (scope_type == .@"if" or scope_type == .elif) {
+            i += 1;
+            const initial_index = i;
+
+            while (i < arr.len and arr[i].type != .keyword) {
+                i += 1;
+            }
+            if (i == arr.len) {
+                return error.MissingThenKeyword;
+            }
+            if (arr[i].value.keyword == .then) {
+                condition = arr[initial_index..i];
+            }
+        }
+
+        // Agora que obtivemos a condição, vamos obter o código
+        // dentro do escopo
+        i += 1;
+        const initial_index = i;
+        var else_scope: ?*Scope = null;
+        var code: []const Token = undefined;
+
+        var blockCount: usize = 0;
+
+        while (i < arr.len) : (i += 1) {
+            if (arr[i].type == .keyword) {
+                switch (arr[i].value.keyword) {
+                    .@"if", .@"while", .@"for", .function => {
+                        blockCount += 1;
+                    },
+                    .elif,
+                    => {
+                        if (blockCount == 0) {
+                            else_scope = try allocator.create(Scope);
+                            i, else_scope.?.* = try createIfScope(i, .elif, arr, allocator);
+                            break;
+                        }
+                    },
+                    .@"else" => {
+                        if (blockCount == 0) {
+                            else_scope = try allocator.create(Scope);
+                            i, else_scope.?.* = try createIfScope(i, .elif, arr, allocator);
+                            break;
+                        }
+                    },
+                    .end => {
+                        if (blockCount == 0) {
+                            break;
+                        }
+                        blockCount -= 1;
+                    },
+                    else => {},
+                }
+            }
+        }
+
+        if (i == arr.len or blockCount > 0) {
+            return error.MissingEndKeyword;
+        }
+
+        if (blockCount < 0) {
+            return error.TooManyEndKeywords;
+        }
+
+        code = arr[initial_index..i];
+        return .{ i, try Scope.init(condition, code, scope_type, else_scope, allocator) };
     }
 
     pub fn runCode(self: *@This(), scopesStack: *ScopeStack) Error!void {
@@ -71,60 +146,9 @@ pub const Scope = struct {
                 .keyword => {
                     switch (token.value.keyword) {
                         .@"if" => {
-                            // Primeiro procuramos a keyword then
-                            i += 1;
-                            var condition: []const Token = undefined;
-                            var initial_index = i;
-
-                            while (i < arr.len and arr[i].type != .keyword) {
-                                i += 1;
-                            }
-                            if (i == arr.len) {
-                                return error.MissingThenKeyword;
-                            }
-                            if (arr[i].value.keyword == .then) {
-                                condition = arr[initial_index..i];
-                            }
-
-                            // Agora que obtivemos a condição, vamos obter o código
-                            // dentro do escopo
-
-                            i += 1;
-                            initial_index = i;
-                            var code: []const Token = undefined;
-
-                            var blockCount: usize = 0;
-
-                            while (i < arr.len) : (i += 1) {
-                                if (arr[i].type == .keyword) {
-                                    switch (arr[i].value.keyword) {
-                                        .@"if" => {
-                                            blockCount += 1;
-                                        },
-                                        .end => {
-                                            if (blockCount == 0) {
-                                                break;
-                                            }
-                                            blockCount -= 1;
-                                        },
-                                        else => {},
-                                    }
-                                }
-                            }
-
-                            if (i == arr.len or blockCount > 0) {
-                                return error.MissingEndKeyword;
-                            }
-
-                            if (blockCount < 0) {
-                                return error.TooManyEndKeywords;
-                            }
-
-                            code = arr[initial_index..i];
-
-                            try scopesStack.pushEmpty(condition, code, .@"if");
-                            var ifScope = scopesStack.peek();
-                            _ = try ifScope.?.processScope(scopesStack);
+                            i, var ifScope: Scope = try createIfScope(i, .@"if", arr, self.allocator);
+                            try scopesStack.push(ifScope);
+                            _ = try ifScope.processScope(scopesStack);
                         },
                         .@"while" => {
                             // Primeiro procuramos a keyword do
@@ -178,7 +202,7 @@ pub const Scope = struct {
 
                             code = arr[initial_index..i];
 
-                            try scopesStack.pushEmpty(condition, code, .@"while");
+                            try scopesStack.pushEmpty(condition, code, null, .@"while");
                             var whileScope = scopesStack.peek();
                             _ = try whileScope.?.processScope(scopesStack);
                         },
@@ -255,19 +279,23 @@ pub const Scope = struct {
         switch (self.type) {
             .@"if",
             .elif,
-            .@"for",
             => {
                 const cond_ret = try Expr.analyse(scopesStack, self.condition.?, self.allocator);
                 if (cond_ret.type == .boolean) {
                     if (!cond_ret.value.boolean) {
+                        if (self.@"else" != null) {
+                            try self.@"else".?.processScope(scopesStack);
+                        }
                         return;
                     }
                 } else {
                     return error.ExpectedBooleanForCondition;
                 }
+                std.debug.print("running: {any}[condition: {any}\n code: {any}\n ]\n", .{self.type, self.condition, self.condition});
                 try self.runCode(scopesStack);
             },
-            // TODO: fazer ele repetir o código de alguma forma
+            // TODO: for loop
+            .@"for" => {},
             .@"while" => {
                 while (true) {
                     const cond_ret = try Expr.analyse(scopesStack, self.condition.?, self.allocator);
@@ -315,9 +343,10 @@ pub const ScopeStack = struct {
         self: *@This(),
         condition: ?[]const Token,
         code: []const Token,
+        else_scope: ?*Scope,
         scope_type: Scope.Type,
     ) !void {
-        try self.stack.push(try Scope.init(condition, code, scope_type, self.allocator));
+        try self.stack.push(try Scope.init(condition, code, scope_type, else_scope, self.allocator));
     }
 
     pub fn push(self: *@This(), value: Scope) !void {

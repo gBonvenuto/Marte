@@ -64,7 +64,7 @@ fn interactive(allocator: std.mem.Allocator) !void {
     try stdout.print("Marte 0.0.1 Copyright (C) 2024 Giancarlo Bonvenuto\n", .{});
     var arrList: std.ArrayList(Token) = undefined;
     scopesStack = ScopeStack.init(allocator);
-    try scopesStack.pushEmpty(null, undefined, .none);
+    try scopesStack.pushEmpty(null, undefined, null, .none);
     var outerScope = scopesStack.peek().?;
     defer {
         scopesStack.deinit();
