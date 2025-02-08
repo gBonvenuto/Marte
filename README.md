@@ -20,7 +20,7 @@ If you have any suggestions to the code or to the project, feel free to create a
 The codebase is a mess for two reasons:
 
 1. This is just a personal project and still in development (when the project is more advanced, I'll probably refactor it)
-2. I'm exploring different Zig coding patterns, so this codebase does not have yet a pattern intentionally
+2. I'm exploring different Zig coding patterns, so this codebase intentionally does not have a pattern yet
 
 # Marte
 
